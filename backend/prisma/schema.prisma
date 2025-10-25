@@ -6,3 +6,87 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+model User {
+  id           String                 @id @default(uuid()) @db.Uuid
+  name         String
+  email        String                 @unique
+  username     String                 @unique
+  passwordHash String?                @map("password_hash")
+  googleId     String?                @unique @map("google_id")
+  timezone     String                 @default("UTC")
+  createdAt    DateTime               @default(now()) @map("created_at")
+  updatedAt    DateTime               @updatedAt @map("updated_at")
+  eventTypes   EventType[]
+  rules        AvailabilityRule[]
+  overrides    AvailabilityOverride[]
+  bookings     Booking[]
+
+  @@map("users")
+}
+
+model EventType {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  name        String
+  slug        String
+  description String?
+  durationMin Int       @map("duration_min")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings    Booking[]
+
+  @@unique([userId, slug])
+  @@map("event_types")
+}
+
+model AvailabilityRule {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  dayOfWeek Int      @map("day_of_week")
+  startTime String   @map("start_time")
+  endTime   String   @map("end_time")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("availability_rules")
+}
+
+model AvailabilityOverride {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  date        DateTime @db.Date
+  isAvailable Boolean  @default(false) @map("is_available")
+  startTime   String?  @map("start_time")
+  endTime     String?  @map("end_time")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@map("availability_overrides")
+}
+
+model Booking {
+  id          String        @id @default(uuid()) @db.Uuid
+  eventTypeId String        @map("event_type_id") @db.Uuid
+  hostId      String        @map("host_id") @db.Uuid
+  guestName   String        @map("guest_name")
+  guestEmail  String        @map("guest_email")
+  startTime   DateTime      @map("start_time") @db.Timestamptz(6)
+  endTime     DateTime      @map("end_time") @db.Timestamptz(6)
+  status      BookingStatus @default(CONFIRMED)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  eventType   EventType     @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  host        User          @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([hostId, startTime, endTime])
+  @@map("bookings")
+}

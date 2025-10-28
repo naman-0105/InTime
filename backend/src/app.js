@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
+import authRoutes from './routes/authRoutes.js'
 
 const app = express()
 
@@ -17,6 +18,8 @@ app.use(cookieParser())
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'ok', message: 'InTime API is running' })
 })
+
+app.use('/api/auth', authRoutes)
 
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500

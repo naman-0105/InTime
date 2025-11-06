@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard'
 import { EventsList } from './pages/EventsList'
 import { EventCreate } from './pages/EventCreate'
 import { EventEdit } from './pages/EventEdit'
+import { Availability } from './pages/Availability'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AppLayout } from './components/AppLayout'
 
@@ -42,6 +43,16 @@ function App() {
               <ProtectedRoute>
                 <AppLayout>
                   <EventEdit />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/availability"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Availability />
                 </AppLayout>
               </ProtectedRoute>
             }

@@ -31,3 +31,16 @@ export interface EventResponse {
 export interface EventsResponse {
   events: EventType[]
 }
+
+export interface AvailabilityRule {
+  id: string
+  userId: string
+  dayOfWeek: number
+  startTime: string
+  endTime: string
+  createdAt: string
+}
+
+export interface AvailabilityResponse {
+  rules: AvailabilityRule[]
+}

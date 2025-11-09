@@ -44,3 +44,21 @@ export interface AvailabilityRule {
 export interface AvailabilityResponse {
   rules: AvailabilityRule[]
 }
+
+export interface AvailabilityOverride {
+  id: string
+  userId: string
+  date: string
+  isAvailable: boolean
+  startTime: string | null
+  endTime: string | null
+  createdAt: string
+}
+
+export interface OverridesResponse {
+  overrides: AvailabilityOverride[]
+}
+
+export interface OverrideResponse {
+  override: AvailabilityOverride
+}

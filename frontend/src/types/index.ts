@@ -62,3 +62,22 @@ export interface OverridesResponse {
 export interface OverrideResponse {
   override: AvailabilityOverride
 }
+
+export interface PublicHost {
+  name: string
+  username: string
+  timezone: string
+}
+
+export interface PublicEvent {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  durationMin: number
+}
+
+export interface PublicEventResponse {
+  host: PublicHost
+  event: PublicEvent
+}

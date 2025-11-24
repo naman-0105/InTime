@@ -1,8 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { publicService } from '../services/publicService'
-import type { PublicHost, PublicEvent } from '../types'
-import { Calendar as CalendarIcon, Clock, Globe, ChevronLeft, ChevronRight, User } from 'lucide-react'
+import type { PublicHost, PublicEvent, TimeSlot } from '../types'
+import {
+  Calendar as CalendarIcon,
+  Clock,
+  Globe,
+  ChevronLeft,
+  ChevronRight,
+  User,
+  CheckCircle2,
+} from 'lucide-react'
 
 export const PublicBooking = () => {
   const { username, eventSlug } = useParams<{ username: string; eventSlug: string }>()
@@ -14,6 +22,9 @@ export const PublicBooking = () => {
 
   const [currentMonth, setCurrentMonth] = useState(() => new Date())
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [slots, setSlots] = useState<TimeSlot[]>([])
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null)
 
   useEffect(() => {
     if (!username || !eventSlug) return
@@ -38,6 +49,29 @@ export const PublicBooking = () => {
 
     loadEvent()
   }, [username, eventSlug])
+
+  useEffect(() => {
+    if (!username || !eventSlug || !selectedDate) {
+      setSlots([])
+      setSelectedSlot(null)
+      return
+    }
+
+    const loadSlots = async () => {
+      try {
+        setLoadingSlots(true)
+        setSelectedSlot(null)
+        const data = await publicService.getSlots(username, eventSlug, selectedDate)
+        setSlots(data.slots)
+      } catch {
+        setSlots([])
+      } finally {
+        setLoadingSlots(false)
+      }
+    }
+
+    loadSlots()
+  }, [username, eventSlug, selectedDate])
 
   const nextMonth = () => {
     setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
@@ -99,6 +133,13 @@ export const PublicBooking = () => {
     return `${year}-${mm}-${dd}`
   }
 
+  const formatSlotTime = (timeStr: string) => {
+    const [h, m] = timeStr.split(':').map(Number)
+    const period = h >= 12 ? 'PM' : 'AM'
+    const displayH = h % 12 === 0 ? 12 : h % 12
+    return `${displayH}:${String(m).padStart(2, '0')} ${period}`
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
@@ -123,8 +164,8 @@ export const PublicBooking = () => {
 
   return (
     <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4 sm:p-6 lg:p-8">
-      <div className="w-full max-w-4xl bg-white border border-neutral-200 rounded-xl shadow-sm overflow-hidden grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-neutral-200">
-        <div className="md:col-span-5 p-6 sm:p-8 flex flex-col justify-between space-y-6">
+      <div className="w-full max-w-5xl bg-white border border-neutral-200 rounded-xl shadow-sm overflow-hidden grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-neutral-200">
+        <div className="lg:col-span-4 p-6 sm:p-8 flex flex-col justify-between space-y-6">
           <div className="space-y-4">
             <div className="flex items-center space-x-2.5 text-xs text-neutral-600 font-medium">
               <div className="w-6 h-6 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-700">
@@ -166,7 +207,7 @@ export const PublicBooking = () => {
           </div>
         </div>
 
-        <div className="md:col-span-7 p-6 sm:p-8 space-y-6">
+        <div className={`${selectedDate ? 'lg:col-span-5' : 'lg:col-span-8'} p-6 sm:p-8 space-y-5 transition-all`}>
           <div>
             <h2 className="text-sm font-semibold text-neutral-900">Select a Date</h2>
             <p className="text-xs text-neutral-500 mt-0.5">
@@ -240,18 +281,47 @@ export const PublicBooking = () => {
               })}
             </div>
           </div>
-
-          {selectedDate && (
-            <div className="p-3.5 rounded-lg bg-neutral-50 border border-neutral-200 text-xs text-neutral-700 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <CalendarIcon className="w-4 h-4 text-neutral-500" />
-                <span>
-                  Selected Date: <strong className="text-neutral-900">{selectedDate}</strong>
-                </span>
-              </div>
-            </div>
-          )}
         </div>
+
+        {selectedDate && (
+          <div className="lg:col-span-3 p-6 sm:p-8 space-y-4 border-t lg:border-t-0 lg:border-l border-neutral-200 bg-neutral-50/50">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-900">
+                Available Times
+              </h3>
+              <p className="text-[11px] text-neutral-500 mt-0.5">{selectedDate}</p>
+            </div>
+
+            {loadingSlots ? (
+              <div className="py-8 text-center text-neutral-500 text-xs">Loading available slots...</div>
+            ) : slots.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-xs text-neutral-500">No available slots on this date.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+                {slots.map((slot) => {
+                  const isSelected = selectedSlot?.time === slot.time
+                  return (
+                    <button
+                      key={slot.time}
+                      type="button"
+                      onClick={() => setSelectedSlot(slot)}
+                      className={`w-full h-10 px-3 rounded-md text-xs font-medium border flex items-center justify-between transition-colors cursor-pointer ${
+                        isSelected
+                          ? 'bg-neutral-900 border-neutral-900 text-white shadow-xs'
+                          : 'bg-white border-neutral-300 text-neutral-800 hover:border-neutral-900 hover:bg-neutral-50'
+                      }`}
+                    >
+                      <span>{formatSlotTime(slot.time)}</span>
+                      {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

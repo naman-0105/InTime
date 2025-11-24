@@ -81,3 +81,15 @@ export interface PublicEventResponse {
   host: PublicHost
   event: PublicEvent
 }
+
+export interface TimeSlot {
+  time: string
+  startTime: string
+  endTime: string
+}
+
+export interface SlotsResponse {
+  date: string
+  timezone: string
+  slots: TimeSlot[]
+}

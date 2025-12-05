@@ -93,3 +93,31 @@ export interface SlotsResponse {
   timezone: string
   slots: TimeSlot[]
 }
+
+export interface Booking {
+  id: string
+  eventTypeId: string
+  hostId: string
+  guestName: string
+  guestEmail: string
+  startTime: string
+  endTime: string
+  status: 'CONFIRMED' | 'CANCELLED'
+  createdAt: string
+  updatedAt: string
+  eventType?: {
+    name: string
+    durationMin: number
+    description?: string | null
+  }
+  host?: {
+    name: string
+    email: string
+    username?: string
+    timezone: string
+  }
+}
+
+export interface BookingResponse {
+  booking: Booking
+}

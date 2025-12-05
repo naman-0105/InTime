@@ -8,6 +8,7 @@ import { EventCreate } from './pages/EventCreate'
 import { EventEdit } from './pages/EventEdit'
 import { Availability } from './pages/Availability'
 import { PublicBooking } from './pages/PublicBooking'
+import { BookedConfirmation } from './pages/BookedConfirmation'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AppLayout } from './components/AppLayout'
 
@@ -19,6 +20,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/book/:username/:eventSlug" element={<PublicBooking />} />
+          <Route path="/booked/:bookingId" element={<BookedConfirmation />} />
           <Route
             path="/events"
             element={

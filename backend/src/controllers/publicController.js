@@ -195,47 +195,67 @@ export const createBooking = async (req, res, next) => {
       return res.status(400).json({ error: `Booking duration must be exactly ${event.durationMin} minutes` })
     }
 
-    const existingBooking = await prisma.booking.findFirst({
-      where: {
-        hostId: host.id,
-        status: 'CONFIRMED',
-        startTime: { lt: endUtc },
-        endTime: { gt: startUtc },
-      },
-    })
+    try {
+      const booking = await prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRaw`SELECT id FROM users WHERE id = ${host.id}::uuid FOR UPDATE`
 
-    if (existingBooking) {
-      return res.status(409).json({ error: 'This time slot is no longer available. Please select another slot.' })
+          const existingBooking = await tx.booking.findFirst({
+            where: {
+              hostId: host.id,
+              status: 'CONFIRMED',
+              startTime: { lt: endUtc },
+              endTime: { gt: startUtc },
+            },
+          })
+
+          if (existingBooking) {
+            const err = new Error('This time slot is no longer available. Please select another slot.')
+            err.statusCode = 409
+            throw err
+          }
+
+          return await tx.booking.create({
+            data: {
+              eventTypeId: event.id,
+              hostId: host.id,
+              guestName: guestName.trim(),
+              guestEmail: guestEmail.toLowerCase().trim(),
+              startTime: startUtc,
+              endTime: endUtc,
+              status: 'CONFIRMED',
+            },
+            include: {
+              eventType: {
+                select: {
+                  name: true,
+                  durationMin: true,
+                },
+              },
+              host: {
+                select: {
+                  name: true,
+                  email: true,
+                  timezone: true,
+                },
+              },
+            },
+          })
+        },
+        {
+          isolationLevel: 'Serializable',
+        }
+      )
+
+      return res.status(201).json({ booking })
+    } catch (txError) {
+      if (txError.statusCode === 409 || txError.code === 'P2034') {
+        return res.status(409).json({
+          error: 'This time slot is no longer available. Please select another slot.',
+        })
+      }
+      throw txError
     }
-
-    const booking = await prisma.booking.create({
-      data: {
-        eventTypeId: event.id,
-        hostId: host.id,
-        guestName: guestName.trim(),
-        guestEmail: guestEmail.toLowerCase().trim(),
-        startTime: startUtc,
-        endTime: endUtc,
-        status: 'CONFIRMED',
-      },
-      include: {
-        eventType: {
-          select: {
-            name: true,
-            durationMin: true,
-          },
-        },
-        host: {
-          select: {
-            name: true,
-            email: true,
-            timezone: true,
-          },
-        },
-      },
-    })
-
-    return res.status(201).json({ booking })
   } catch (error) {
     next(error)
   }

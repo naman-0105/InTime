@@ -106,7 +106,9 @@ export interface Booking {
   createdAt: string
   updatedAt: string
   eventType?: {
+    id?: string
     name: string
+    slug?: string
     durationMin: number
     description?: string | null
   }
@@ -120,4 +122,8 @@ export interface Booking {
 
 export interface BookingResponse {
   booking: Booking
+}
+
+export interface BookingsResponse {
+  bookings: Booking[]
 }

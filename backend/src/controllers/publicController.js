@@ -295,3 +295,53 @@ export const getBookingById = async (req, res, next) => {
     next(error)
   }
 }
+
+export const cancelBookingById = async (req, res, next) => {
+  try {
+    const { id } = req.params
+
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+    })
+
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found' })
+    }
+
+    if (booking.status === 'CANCELLED') {
+      return res.status(400).json({ error: 'Booking is already cancelled' })
+    }
+
+    const updatedBooking = await prisma.booking.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+      },
+      include: {
+        eventType: {
+          select: {
+            name: true,
+            durationMin: true,
+            description: true,
+          },
+        },
+        host: {
+          select: {
+            name: true,
+            email: true,
+            username: true,
+            timezone: true,
+          },
+        },
+      },
+    })
+
+    return res.status(200).json({
+      booking: updatedBooking,
+      message: 'Booking cancelled successfully',
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+

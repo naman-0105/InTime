@@ -30,4 +30,16 @@ export const bookingService = {
     }
     return json.booking
   },
+
+  async cancelBooking(id: string): Promise<BookingResponse> {
+    const res = await fetch(`${API_BASE}/${id}/cancel`, {
+      method: 'POST',
+      credentials: 'include',
+    })
+    const json: BookingResponse = await res.json()
+    if (!res.ok) {
+      throw new Error((json as unknown as { error: string }).error || 'Failed to cancel booking')
+    }
+    return json
+  },
 }

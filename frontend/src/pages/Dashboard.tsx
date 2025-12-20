@@ -24,6 +24,10 @@ export const Dashboard = () => {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [events, setEvents] = useState<EventType[]>([])
   const [loadingBookings, setLoadingBookings] = useState(true)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null)
 
   const loadDashboardData = async () => {
     try {
@@ -44,6 +48,28 @@ export const Dashboard = () => {
   useEffect(() => {
     loadDashboardData()
   }, [bookingTab])
+
+  const handleCancelBooking = async (bookingId: string) => {
+    try {
+      setCancellingId(bookingId)
+      setActionError(null)
+      setActionSuccess(null)
+      const res = await bookingService.cancelBooking(bookingId)
+      setBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? res.booking : b))
+      )
+      setConfirmingCancelId(null)
+      setActionSuccess('Booking cancelled successfully')
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setActionError(err.message)
+      } else {
+        setActionError('Failed to cancel booking')
+      }
+    } finally {
+      setCancellingId(null)
+    }
+  }
 
   if (!user) {
     return null
@@ -142,6 +168,32 @@ export const Dashboard = () => {
         </div>
 
         <div className="space-y-4">
+          {actionError && (
+            <div className="border border-red-200 text-red-700 text-xs p-3 rounded-md flex items-center justify-between">
+              <span>{actionError}</span>
+              <button
+                type="button"
+                onClick={() => setActionError(null)}
+                className="text-red-500 hover:text-red-700 font-bold ml-2 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {actionSuccess && (
+            <div className="border border-emerald-200 text-emerald-700 text-xs p-3 rounded-md flex items-center justify-between">
+              <span>{actionSuccess}</span>
+              <button
+                type="button"
+                onClick={() => setActionSuccess(null)}
+                className="text-emerald-500 hover:text-emerald-700 font-bold ml-2 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
             <div className="flex items-center space-x-4">
               <button
@@ -248,6 +300,46 @@ export const Dashboard = () => {
                         </div>
                       </div>
                     </div>
+
+                    {b.status === 'CONFIRMED' && (
+                      <div className="flex items-center sm:self-center">
+                        {confirmingCancelId === b.id ? (
+                          <div className="flex items-center space-x-2 bg-neutral-100 p-1.5 rounded-md">
+                            <span className="text-[11px] font-medium text-neutral-700 mr-1">
+                              Cancel?
+                            </span>
+                            <button
+                              type="button"
+                              disabled={cancellingId === b.id}
+                              onClick={() => handleCancelBooking(b.id)}
+                              className="px-2 py-1 text-[11px] font-medium text-red-600 rounded transition-colors disabled:opacity-50 cursor-pointer"
+                            >
+                              {cancellingId === b.id ? 'Cancelling...' : 'Yes'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={cancellingId === b.id}
+                              onClick={() => setConfirmingCancelId(null)}
+                              className="px-2 py-1 text-[11px] font-medium text-neutral-600 hover:text-neutral-900 rounded transition-colors disabled:opacity-50 cursor-pointer"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActionError(null)
+                              setActionSuccess(null)
+                              setConfirmingCancelId(b.id)
+                            }}
+                            className="text-xs font-medium text-neutral-600 hover:text-red-700 border border-neutral-200 hover:border-red-200 px-3 py-1.5 rounded-md transition-colors cursor-pointer"
+                          >
+                            Cancel Meeting
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}

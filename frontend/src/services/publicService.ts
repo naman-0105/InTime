@@ -55,4 +55,15 @@ export const publicService = {
     }
     return json
   },
+
+  async cancelBooking(id: string): Promise<BookingResponse> {
+    const res = await fetch(`${API_BASE}/bookings/${id}/cancel`, {
+      method: 'POST',
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      throw new Error(json.error || 'Failed to cancel booking')
+    }
+    return json
+  },
 }

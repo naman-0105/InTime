@@ -1,4 +1,5 @@
 import prisma from '../db/prisma.js'
+import { sendBookingCancellationEmails } from '../services/emailService.js'
 
 export const getBookings = async (req, res, next) => {
   try {
@@ -108,7 +109,21 @@ export const cancelBooking = async (req, res, next) => {
             durationMin: true,
           },
         },
+        host: {
+          select: {
+            name: true,
+            email: true,
+            username: true,
+            timezone: true,
+          },
+        },
       },
+    })
+
+    sendBookingCancellationEmails({
+      booking: updatedBooking,
+      host: updatedBooking.host,
+      eventType: updatedBooking.eventType,
     })
 
     return res.status(200).json({

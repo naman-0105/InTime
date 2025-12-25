@@ -1,6 +1,10 @@
 import prisma from '../db/prisma.js'
 import { generateAvailableSlots } from '../services/slotService.js'
 import { isValidEmail } from '../utils/validation.js'
+import {
+  sendBookingConfirmationEmails,
+  sendBookingCancellationEmails,
+} from '../services/emailService.js'
 
 export const getPublicEvent = async (req, res, next) => {
   try {
@@ -247,6 +251,12 @@ export const createBooking = async (req, res, next) => {
         }
       )
 
+      sendBookingConfirmationEmails({
+        booking,
+        host,
+        eventType: event,
+      })
+
       return res.status(201).json({ booking })
     } catch (txError) {
       if (txError.statusCode === 409 || txError.code === 'P2034') {
@@ -334,6 +344,12 @@ export const cancelBookingById = async (req, res, next) => {
           },
         },
       },
+    })
+
+    sendBookingCancellationEmails({
+      booking: updatedBooking,
+      host: updatedBooking.host,
+      eventType: updatedBooking.eventType,
     })
 
     return res.status(200).json({

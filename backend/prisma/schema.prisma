@@ -75,6 +75,7 @@ model AvailabilityOverride {
 
 model Booking {
   id          String        @id @default(uuid()) @db.Uuid
+  token       String        @unique
   eventTypeId String        @map("event_type_id") @db.Uuid
   hostId      String        @map("host_id") @db.Uuid
   guestName   String        @map("guest_name")
@@ -88,5 +89,6 @@ model Booking {
   host        User          @relation(fields: [hostId], references: [id], onDelete: Cascade)
 
   @@index([hostId, startTime, endTime])
+  @@index([token])
   @@map("bookings")
 }

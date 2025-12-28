@@ -85,7 +85,7 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
           <p style="margin: 0 0 8px 0;"><strong>Host:</strong> ${host.name} (${host.email})</p>
           <p style="margin: 0;"><strong>Guest:</strong> ${booking.guestName} (${booking.guestEmail})</p>
         </div>
-        <p style="font-size: 14px; color: #6b7280;">Need to manage or cancel this booking? <a href="${clientUrl}/booked/${booking.id}" style="color: #2563eb; text-decoration: underline;">Click here to view booking</a>.</p>
+        <p style="font-size: 14px; color: #6b7280;">Need to manage or cancel this booking? <a href="${clientUrl}/booked/${booking.token}" style="color: #2563eb; text-decoration: underline;">Click here to view booking</a>.</p>
       </div>
     `
 

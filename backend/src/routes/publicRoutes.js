@@ -3,14 +3,14 @@ import {
   getPublicEvent,
   getPublicEventSlots,
   createBooking,
-  getBookingById,
-  cancelBookingById,
+  getBookingByToken,
+  cancelBookingByToken,
 } from '../controllers/publicController.js'
 
 const router = express.Router()
 
-router.get('/bookings/:id', getBookingById)
-router.post('/bookings/:id/cancel', cancelBookingById)
+router.get('/bookings/:token', getBookingByToken)
+router.post('/bookings/:token/cancel', cancelBookingByToken)
 router.get('/:username/:eventSlug', getPublicEvent)
 router.get('/:username/:eventSlug/slots', getPublicEventSlots)
 router.post('/:username/:eventSlug/book', createBooking)

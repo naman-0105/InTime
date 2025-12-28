@@ -20,7 +20,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/book/:username/:eventSlug" element={<PublicBooking />} />
-          <Route path="/booked/:bookingId" element={<BookedConfirmation />} />
+          <Route path="/booked/:token" element={<BookedConfirmation />} />
           <Route
             path="/events"
             element={

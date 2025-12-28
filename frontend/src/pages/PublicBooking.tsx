@@ -180,7 +180,7 @@ export const PublicBooking = () => {
         endTime: selectedSlot.endTime,
       })
 
-      navigate(`/booked/${res.booking.id}`)
+      navigate(`/booked/${res.booking.token}`)
     } catch (err: unknown) {
       if (err instanceof Error) {
         setBookingError(err.message)

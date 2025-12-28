@@ -124,6 +124,11 @@ export interface BookingResponse {
   booking: Booking
 }
 
+export interface CreatedBookingResponse {
+  booking: Booking & { token: string }
+}
+
 export interface BookingsResponse {
   bookings: Booking[]
 }
+

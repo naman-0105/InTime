@@ -23,7 +23,14 @@ export const getBookings = async (req, res, next) => {
 
     const bookings = await prisma.booking.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        guestName: true,
+        guestEmail: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        createdAt: true,
         eventType: {
           select: {
             id: true,
@@ -53,7 +60,14 @@ export const getBookingById = async (req, res, next) => {
         id,
         hostId: req.user.id,
       },
-      include: {
+      select: {
+        id: true,
+        guestName: true,
+        guestEmail: true,
+        startTime: true,
+        endTime: true,
+        status: true,
+        createdAt: true,
         eventType: {
           select: {
             id: true,
@@ -100,7 +114,13 @@ export const cancelBooking = async (req, res, next) => {
       data: {
         status: 'CANCELLED',
       },
-      include: {
+      select: {
+        id: true,
+        guestName: true,
+        guestEmail: true,
+        startTime: true,
+        endTime: true,
+        status: true,
         eventType: {
           select: {
             id: true,

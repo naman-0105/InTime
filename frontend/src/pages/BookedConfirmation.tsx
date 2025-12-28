@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 
 export const BookedConfirmation = () => {
-  const { bookingId } = useParams<{ bookingId: string }>()
+  const { token } = useParams<{ token: string }>()
   const [booking, setBooking] = useState<Booking | null>(null)
   const [loading, setLoading] = useState(true)
   const [cancelling, setCancelling] = useState(false)
@@ -22,12 +22,12 @@ export const BookedConfirmation = () => {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!bookingId) return
+    if (!token) return
 
     const loadBooking = async () => {
       try {
         setLoading(true)
-        const data = await publicService.getBooking(bookingId)
+        const data = await publicService.getBooking(token)
         setBooking(data.booking)
       } catch (err: unknown) {
         if (err instanceof Error) {
@@ -41,13 +41,13 @@ export const BookedConfirmation = () => {
     }
 
     loadBooking()
-  }, [bookingId])
+  }, [token])
 
   const handleCancelBooking = async () => {
-    if (!bookingId) return
+    if (!token) return
     try {
       setCancelling(true)
-      const res = await publicService.cancelBooking(bookingId)
+      const res = await publicService.cancelBooking(token)
       setBooking(res.booking)
       setShowCancelConfirm(false)
     } catch (err: unknown) {

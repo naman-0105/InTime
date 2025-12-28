@@ -1,4 +1,9 @@
-import type { PublicEventResponse, SlotsResponse, BookingResponse } from '../types'
+import type {
+  PublicEventResponse,
+  SlotsResponse,
+  BookingResponse,
+  CreatedBookingResponse,
+} from '../types'
 
 const API_BASE = '/api/public'
 
@@ -34,7 +39,7 @@ export const publicService = {
       startTime: string
       endTime: string
     }
-  ): Promise<BookingResponse> {
+  ): Promise<CreatedBookingResponse> {
     const res = await fetch(`${API_BASE}/${username}/${eventSlug}/book`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -47,8 +52,8 @@ export const publicService = {
     return json
   },
 
-  async getBooking(id: string): Promise<BookingResponse> {
-    const res = await fetch(`${API_BASE}/bookings/${id}`)
+  async getBooking(token: string): Promise<BookingResponse> {
+    const res = await fetch(`${API_BASE}/bookings/${token}`)
     const json = await res.json()
     if (!res.ok) {
       throw new Error(json.error || 'Failed to load booking confirmation')
@@ -56,8 +61,8 @@ export const publicService = {
     return json
   },
 
-  async cancelBooking(id: string): Promise<BookingResponse> {
-    const res = await fetch(`${API_BASE}/bookings/${id}/cancel`, {
+  async cancelBooking(token: string): Promise<BookingResponse> {
+    const res = await fetch(`${API_BASE}/bookings/${token}/cancel`, {
       method: 'POST',
     })
     const json = await res.json()

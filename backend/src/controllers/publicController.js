@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import prisma from '../db/prisma.js'
 import { generateAvailableSlots } from '../services/slotService.js'
 import { isValidEmail } from '../utils/validation.js'
@@ -200,6 +201,8 @@ export const createBooking = async (req, res, next) => {
     }
 
     try {
+      const token = crypto.randomBytes(24).toString('hex')
+
       const booking = await prisma.$transaction(
         async (tx) => {
           await tx.$executeRaw`SELECT id FROM users WHERE id = ${host.id}::uuid FOR UPDATE`
@@ -221,6 +224,7 @@ export const createBooking = async (req, res, next) => {
 
           return await tx.booking.create({
             data: {
+              token,
               eventTypeId: event.id,
               hostId: host.id,
               guestName: guestName.trim(),
@@ -271,16 +275,28 @@ export const createBooking = async (req, res, next) => {
   }
 }
 
-export const getBookingById = async (req, res, next) => {
+export const getBookingByToken = async (req, res, next) => {
   try {
-    const { id } = req.params
+    const { token } = req.params
+
+    if (!token) {
+      return res.status(400).json({ error: 'Booking token is required' })
+    }
 
     const booking = await prisma.booking.findUnique({
-      where: { id },
-      include: {
+      where: { token },
+      select: {
+        id: true,
+        guestName: true,
+        guestEmail: true,
+        startTime: true,
+        endTime: true,
+        status: true,
         eventType: {
           select: {
+            id: true,
             name: true,
+            slug: true,
             durationMin: true,
             description: true,
           },
@@ -306,12 +322,16 @@ export const getBookingById = async (req, res, next) => {
   }
 }
 
-export const cancelBookingById = async (req, res, next) => {
+export const cancelBookingByToken = async (req, res, next) => {
   try {
-    const { id } = req.params
+    const { token } = req.params
+
+    if (!token) {
+      return res.status(400).json({ error: 'Booking token is required' })
+    }
 
     const booking = await prisma.booking.findUnique({
-      where: { id },
+      where: { token },
     })
 
     if (!booking) {
@@ -323,11 +343,18 @@ export const cancelBookingById = async (req, res, next) => {
     }
 
     const updatedBooking = await prisma.booking.update({
-      where: { id },
+      where: { token },
       data: {
         status: 'CANCELLED',
       },
-      include: {
+      select: {
+        id: true,
+        token: true,
+        guestName: true,
+        guestEmail: true,
+        startTime: true,
+        endTime: true,
+        status: true,
         eventType: {
           select: {
             name: true,

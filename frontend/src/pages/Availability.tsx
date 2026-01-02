@@ -373,7 +373,7 @@ export const Availability = () => {
       )}
 
       {successMessage && (
-        <div className="p-3.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center space-x-2">
+        <div className="p-3.5 rounded-md border border-emerald-200 text-gray-800 text-xs flex items-center space-x-2">
           <Check className="w-4 h-4 shrink-0 text-emerald-600" />
           <span>{successMessage}</span>
         </div>

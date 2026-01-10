@@ -44,10 +44,25 @@ export const localToUTC = (dateStr, timeStr, timeZone) => {
   return new Date(baseUtc - offset)
 }
 
-export const generateAvailableSlots = async ({ hostId, timezone, durationMin, dateStr }) => {
+export const generateAvailableSlots = async ({
+  hostId,
+  timezone,
+  durationMin,
+  dateStr,
+  minNoticeMin = 0,
+  maxNoticeDays = 60,
+  bufferBeforeMin = 0,
+  bufferAfterMin = 0,
+}) => {
   const parsedDate = new Date(`${dateStr}T00:00:00.000Z`)
   if (isNaN(parsedDate.getTime())) {
     throw new Error('Invalid date format')
+  }
+
+  const now = new Date()
+  const maxNoticeLimit = new Date(now.getTime() + maxNoticeDays * 24 * 60 * 60 * 1000)
+  if (parsedDate.getTime() > maxNoticeLimit.getTime()) {
+    return []
   }
 
   const override = await prisma.availabilityOverride.findUnique({
@@ -113,24 +128,43 @@ export const generateAvailableSlots = async ({ hostId, timezone, durationMin, da
   const dayStartUtc = candidateSlots[0].startTime
   const dayEndUtc = candidateSlots[candidateSlots.length - 1].endTime
 
+  const searchStartUtc = new Date(dayStartUtc.getTime() - 24 * 60 * 60 * 1000)
+  const searchEndUtc = new Date(dayEndUtc.getTime() + 24 * 60 * 60 * 1000)
+
   const confirmedBookings = await prisma.booking.findMany({
     where: {
       hostId,
       status: 'CONFIRMED',
-      startTime: { lt: dayEndUtc },
-      endTime: { gt: dayStartUtc },
+      startTime: { lt: searchEndUtc },
+      endTime: { gt: searchStartUtc },
+    },
+    include: {
+      eventType: {
+        select: {
+          bufferBeforeMin: true,
+          bufferAfterMin: true,
+        },
+      },
     },
   })
 
-  const now = new Date()
+  const minNoticeLimit = new Date(now.getTime() + minNoticeMin * 60 * 1000)
 
   const availableSlots = candidateSlots.filter((slot) => {
-    if (slot.startTime <= now) {
+    if (slot.startTime < minNoticeLimit) {
       return false
     }
 
+    const slotEffStart = new Date(slot.startTime.getTime() - bufferBeforeMin * 60 * 1000)
+    const slotEffEnd = new Date(slot.endTime.getTime() + bufferAfterMin * 60 * 1000)
+
     const hasConflict = confirmedBookings.some((booking) => {
-      return booking.startTime < slot.endTime && booking.endTime > slot.startTime
+      const bBufferBefore = (booking.eventType?.bufferBeforeMin || 0) * 60 * 1000
+      const bBufferAfter = (booking.eventType?.bufferAfterMin || 0) * 60 * 1000
+      const bEffStart = new Date(booking.startTime.getTime() - bBufferBefore)
+      const bEffEnd = new Date(booking.endTime.getTime() + bBufferAfter)
+
+      return slotEffStart < bEffEnd && slotEffEnd > bEffStart
     })
 
     return !hasConflict

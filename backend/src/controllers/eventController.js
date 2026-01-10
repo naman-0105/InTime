@@ -43,7 +43,17 @@ export const getEventById = async (req, res, next) => {
 
 export const createEvent = async (req, res, next) => {
   try {
-    const { name, slug, description, durationMin, isActive } = req.body
+    const {
+      name,
+      slug,
+      description,
+      durationMin,
+      isActive,
+      minNoticeMin,
+      maxNoticeDays,
+      bufferBeforeMin,
+      bufferAfterMin,
+    } = req.body
 
     if (!name || !durationMin) {
       return res.status(400).json({ error: 'Name and duration are required' })
@@ -72,6 +82,15 @@ export const createEvent = async (req, res, next) => {
       return res.status(400).json({ error: 'You already have an event with this URL slug' })
     }
 
+    const parsedMinNotice =
+      minNoticeMin !== undefined ? Math.max(0, parseInt(minNoticeMin, 10) || 0) : 0
+    const parsedMaxNotice =
+      maxNoticeDays !== undefined ? Math.max(1, parseInt(maxNoticeDays, 10) || 60) : 60
+    const parsedBufferBefore =
+      bufferBeforeMin !== undefined ? Math.max(0, parseInt(bufferBeforeMin, 10) || 0) : 0
+    const parsedBufferAfter =
+      bufferAfterMin !== undefined ? Math.max(0, parseInt(bufferAfterMin, 10) || 0) : 0
+
     const event = await prisma.eventType.create({
       data: {
         userId: req.user.id,
@@ -80,6 +99,10 @@ export const createEvent = async (req, res, next) => {
         description: description ? description.trim() : null,
         durationMin: duration,
         isActive: isActive !== undefined ? Boolean(isActive) : true,
+        minNoticeMin: parsedMinNotice,
+        maxNoticeDays: parsedMaxNotice,
+        bufferBeforeMin: parsedBufferBefore,
+        bufferAfterMin: parsedBufferAfter,
       },
     })
 
@@ -92,7 +115,17 @@ export const createEvent = async (req, res, next) => {
 export const updateEvent = async (req, res, next) => {
   try {
     const { id } = req.params
-    const { name, slug, description, durationMin, isActive } = req.body
+    const {
+      name,
+      slug,
+      description,
+      durationMin,
+      isActive,
+      minNoticeMin,
+      maxNoticeDays,
+      bufferBeforeMin,
+      bufferAfterMin,
+    } = req.body
 
     const existingEvent = await prisma.eventType.findFirst({
       where: { id, userId: req.user.id },
@@ -130,14 +163,40 @@ export const updateEvent = async (req, res, next) => {
       duration = parsedDuration
     }
 
+    const parsedMinNotice =
+      minNoticeMin !== undefined
+        ? Math.max(0, parseInt(minNoticeMin, 10) || 0)
+        : existingEvent.minNoticeMin
+    const parsedMaxNotice =
+      maxNoticeDays !== undefined
+        ? Math.max(1, parseInt(maxNoticeDays, 10) || 60)
+        : existingEvent.maxNoticeDays
+    const parsedBufferBefore =
+      bufferBeforeMin !== undefined
+        ? Math.max(0, parseInt(bufferBeforeMin, 10) || 0)
+        : existingEvent.bufferBeforeMin
+    const parsedBufferAfter =
+      bufferAfterMin !== undefined
+        ? Math.max(0, parseInt(bufferAfterMin, 10) || 0)
+        : existingEvent.bufferAfterMin
+
     const event = await prisma.eventType.update({
       where: { id },
       data: {
         name: name !== undefined ? name.trim() : existingEvent.name,
         slug: updatedSlug,
-        description: description !== undefined ? (description ? description.trim() : null) : existingEvent.description,
+        description:
+          description !== undefined
+            ? description
+              ? description.trim()
+              : null
+            : existingEvent.description,
         durationMin: duration,
         isActive: isActive !== undefined ? Boolean(isActive) : existingEvent.isActive,
+        minNoticeMin: parsedMinNotice,
+        maxNoticeDays: parsedMaxNotice,
+        bufferBeforeMin: parsedBufferBefore,
+        bufferAfterMin: parsedBufferAfter,
       },
     })
 

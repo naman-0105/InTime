@@ -42,6 +42,7 @@ export const getPublicEvent = async (req, res, next) => {
         slug: true,
         description: true,
         durationMin: true,
+        maxNoticeDays: true,
         isActive: true,
       },
     })
@@ -62,6 +63,7 @@ export const getPublicEvent = async (req, res, next) => {
         slug: event.slug,
         description: event.description,
         durationMin: event.durationMin,
+        maxNoticeDays: event.maxNoticeDays,
       },
     })
   } catch (error) {
@@ -108,6 +110,10 @@ export const getPublicEventSlots = async (req, res, next) => {
         id: true,
         durationMin: true,
         isActive: true,
+        minNoticeMin: true,
+        maxNoticeDays: true,
+        bufferBeforeMin: true,
+        bufferAfterMin: true,
       },
     })
 
@@ -120,6 +126,10 @@ export const getPublicEventSlots = async (req, res, next) => {
       timezone: host.timezone,
       durationMin: event.durationMin,
       dateStr: date,
+      minNoticeMin: event.minNoticeMin,
+      maxNoticeDays: event.maxNoticeDays,
+      bufferBeforeMin: event.bufferBeforeMin,
+      bufferAfterMin: event.bufferAfterMin,
     })
 
     return res.status(200).json({
@@ -188,11 +198,29 @@ export const createBooking = async (req, res, next) => {
         name: true,
         durationMin: true,
         isActive: true,
+        minNoticeMin: true,
+        maxNoticeDays: true,
+        bufferBeforeMin: true,
+        bufferAfterMin: true,
       },
     })
 
     if (!event || !event.isActive) {
       return res.status(404).json({ error: 'Event type not found or is inactive' })
+    }
+
+    const minNoticeLimit = new Date(now.getTime() + event.minNoticeMin * 60 * 1000)
+    if (startUtc < minNoticeLimit) {
+      return res.status(400).json({
+        error: `Minimum scheduling notice of ${event.minNoticeMin} minutes is required`,
+      })
+    }
+
+    const maxNoticeLimit = new Date(now.getTime() + event.maxNoticeDays * 24 * 60 * 60 * 1000)
+    if (startUtc > maxNoticeLimit) {
+      return res.status(400).json({
+        error: `Cannot book more than ${event.maxNoticeDays} days in advance`,
+      })
     }
 
     const durationMinutes = Math.round((endUtc.getTime() - startUtc.getTime()) / (1000 * 60))
@@ -207,16 +235,39 @@ export const createBooking = async (req, res, next) => {
         async (tx) => {
           await tx.$executeRaw`SELECT id FROM users WHERE id = ${host.id}::uuid FOR UPDATE`
 
-          const existingBooking = await tx.booking.findFirst({
+          const bookingEffStart = new Date(startUtc.getTime() - event.bufferBeforeMin * 60 * 1000)
+          const bookingEffEnd = new Date(endUtc.getTime() + event.bufferAfterMin * 60 * 1000)
+
+          const searchRangeStart = new Date(startUtc.getTime() - 24 * 60 * 60 * 1000)
+          const searchRangeEnd = new Date(endUtc.getTime() + 24 * 60 * 60 * 1000)
+
+          const confirmedBookings = await tx.booking.findMany({
             where: {
               hostId: host.id,
               status: 'CONFIRMED',
-              startTime: { lt: endUtc },
-              endTime: { gt: startUtc },
+              startTime: { lt: searchRangeEnd },
+              endTime: { gt: searchRangeStart },
+            },
+            include: {
+              eventType: {
+                select: {
+                  bufferBeforeMin: true,
+                  bufferAfterMin: true,
+                },
+              },
             },
           })
 
-          if (existingBooking) {
+          const hasConflict = confirmedBookings.some((b) => {
+            const bBufferBefore = (b.eventType?.bufferBeforeMin || 0) * 60 * 1000
+            const bBufferAfter = (b.eventType?.bufferAfterMin || 0) * 60 * 1000
+            const bEffStart = new Date(b.startTime.getTime() - bBufferBefore)
+            const bEffEnd = new Date(b.endTime.getTime() + bBufferAfter)
+
+            return bookingEffStart < bEffEnd && bookingEffEnd > bEffStart
+          })
+
+          if (hasConflict) {
             const err = new Error('This time slot is no longer available. Please select another slot.')
             err.statusCode = 409
             throw err

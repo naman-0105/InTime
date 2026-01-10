@@ -31,17 +31,21 @@ model User {
 }
 
 model EventType {
-  id          String    @id @default(uuid()) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  name        String
-  slug        String
-  description String?
-  durationMin Int       @map("duration_min")
-  isActive    Boolean   @default(true) @map("is_active")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bookings    Booking[]
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  name            String
+  slug            String
+  description     String?
+  durationMin     Int       @map("duration_min")
+  isActive        Boolean   @default(true) @map("is_active")
+  minNoticeMin    Int       @default(0) @map("min_notice_min")
+  maxNoticeDays   Int       @default(60) @map("max_notice_days")
+  bufferBeforeMin Int       @default(0) @map("buffer_before_min")
+  bufferAfterMin  Int       @default(0) @map("buffer_after_min")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings        Booking[]
 
   @@unique([userId, slug])
   @@map("event_types")

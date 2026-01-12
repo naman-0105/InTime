@@ -31,6 +31,10 @@ export const eventService = {
     description?: string
     durationMin: number
     isActive?: boolean
+    minNoticeMin?: number
+    maxNoticeDays?: number
+    bufferBeforeMin?: number
+    bufferAfterMin?: number
   }): Promise<EventType> {
     const res = await fetch(API_BASE, {
       method: 'POST',
@@ -53,6 +57,10 @@ export const eventService = {
       description?: string
       durationMin?: number
       isActive?: boolean
+      minNoticeMin?: number
+      maxNoticeDays?: number
+      bufferBeforeMin?: number
+      bufferAfterMin?: number
     }
   ): Promise<EventType> {
     const res = await fetch(`${API_BASE}/${id}`, {

@@ -138,7 +138,21 @@ export const PublicBooking = () => {
   const isDateDisabled = (dayNumber: number) => {
     const d = new Date(year, month, dayNumber)
     d.setHours(0, 0, 0, 0)
-    return d.getTime() < today.getTime()
+    if (d.getTime() < today.getTime()) {
+      return true
+    }
+    const maxDays = event?.maxNoticeDays ?? 60
+    const maxDate = new Date(today.getTime() + maxDays * 24 * 60 * 60 * 1000)
+    maxDate.setHours(23, 59, 59, 999)
+    return d.getTime() > maxDate.getTime()
+  }
+
+  const isNextMonthDisabled = () => {
+    const maxDays = event?.maxNoticeDays ?? 60
+    const maxDate = new Date(today.getTime() + maxDays * 24 * 60 * 60 * 1000)
+    maxDate.setHours(23, 59, 59, 999)
+    const nextMonthFirstDay = new Date(year, month + 1, 1)
+    return nextMonthFirstDay.getTime() > maxDate.getTime()
   }
 
   const formatDateKey = (dayNumber: number) => {
@@ -301,7 +315,8 @@ export const PublicBooking = () => {
                     </button>
                     <button
                       onClick={nextMonth}
-                      className="w-7 h-7 rounded border border-neutral-200 hover:bg-neutral-50 flex items-center justify-center text-neutral-600 transition-colors cursor-pointer"
+                      disabled={isNextMonthDisabled()}
+                      className="w-7 h-7 rounded border border-neutral-200 hover:bg-neutral-50 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
                       title="Next month"
                     >
                       <ChevronRight className="w-4 h-4" />

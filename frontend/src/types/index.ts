@@ -20,6 +20,10 @@ export interface EventType {
   description: string | null
   durationMin: number
   isActive: boolean
+  minNoticeMin: number
+  maxNoticeDays: number
+  bufferBeforeMin: number
+  bufferAfterMin: number
   createdAt: string
   updatedAt: string
 }
@@ -75,6 +79,7 @@ export interface PublicEvent {
   slug: string
   description: string | null
   durationMin: number
+  maxNoticeDays?: number
 }
 
 export interface PublicEventResponse {

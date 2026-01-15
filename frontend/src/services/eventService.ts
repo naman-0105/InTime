@@ -1,4 +1,4 @@
-import type { EventType, EventsResponse, EventResponse } from '../types'
+import type { EventType, EventsResponse, EventResponse, BookingQuestion } from '../types'
 
 const API_BASE = '/api/events'
 
@@ -35,6 +35,7 @@ export const eventService = {
     maxNoticeDays?: number
     bufferBeforeMin?: number
     bufferAfterMin?: number
+    customQuestions?: BookingQuestion[]
   }): Promise<EventType> {
     const res = await fetch(API_BASE, {
       method: 'POST',
@@ -61,6 +62,7 @@ export const eventService = {
       maxNoticeDays?: number
       bufferBeforeMin?: number
       bufferAfterMin?: number
+      customQuestions?: BookingQuestion[]
     }
   ): Promise<EventType> {
     const res = await fetch(`${API_BASE}/${id}`, {

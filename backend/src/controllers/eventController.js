@@ -16,6 +16,11 @@ export const getEvents = async (req, res, next) => {
   try {
     const events = await prisma.eventType.findMany({
       where: { userId: req.user.id },
+      include: {
+        customQuestions: {
+          orderBy: { order: 'asc' },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     })
     return res.status(200).json({ events })
@@ -29,6 +34,11 @@ export const getEventById = async (req, res, next) => {
     const { id } = req.params
     const event = await prisma.eventType.findFirst({
       where: { id, userId: req.user.id },
+      include: {
+        customQuestions: {
+          orderBy: { order: 'asc' },
+        },
+      },
     })
 
     if (!event) {
@@ -53,6 +63,7 @@ export const createEvent = async (req, res, next) => {
       maxNoticeDays,
       bufferBeforeMin,
       bufferAfterMin,
+      customQuestions,
     } = req.body
 
     if (!name || !durationMin) {
@@ -91,6 +102,17 @@ export const createEvent = async (req, res, next) => {
     const parsedBufferAfter =
       bufferAfterMin !== undefined ? Math.max(0, parseInt(bufferAfterMin, 10) || 0) : 0
 
+    let formattedQuestions = []
+    if (Array.isArray(customQuestions)) {
+      formattedQuestions = customQuestions
+        .filter((q) => q && typeof q.label === 'string' && q.label.trim().length > 0)
+        .map((q, idx) => ({
+          label: q.label.trim(),
+          required: Boolean(q.required),
+          order: typeof q.order === 'number' ? q.order : idx,
+        }))
+    }
+
     const event = await prisma.eventType.create({
       data: {
         userId: req.user.id,
@@ -103,6 +125,14 @@ export const createEvent = async (req, res, next) => {
         maxNoticeDays: parsedMaxNotice,
         bufferBeforeMin: parsedBufferBefore,
         bufferAfterMin: parsedBufferAfter,
+        customQuestions: {
+          create: formattedQuestions,
+        },
+      },
+      include: {
+        customQuestions: {
+          orderBy: { order: 'asc' },
+        },
       },
     })
 
@@ -125,6 +155,7 @@ export const updateEvent = async (req, res, next) => {
       maxNoticeDays,
       bufferBeforeMin,
       bufferAfterMin,
+      customQuestions,
     } = req.body
 
     const existingEvent = await prisma.eventType.findFirst({
@@ -180,6 +211,32 @@ export const updateEvent = async (req, res, next) => {
         ? Math.max(0, parseInt(bufferAfterMin, 10) || 0)
         : existingEvent.bufferAfterMin
 
+    if (Array.isArray(customQuestions)) {
+      const formatted = customQuestions
+        .filter((q) => q && typeof q.label === 'string' && q.label.trim().length > 0)
+        .map((q, idx) => ({
+          label: q.label.trim(),
+          required: Boolean(q.required),
+          order: typeof q.order === 'number' ? q.order : idx,
+        }))
+
+      await prisma.$transaction(async (tx) => {
+        await tx.bookingQuestion.deleteMany({
+          where: { eventTypeId: id },
+        })
+        if (formatted.length > 0) {
+          await tx.bookingQuestion.createMany({
+            data: formatted.map((q) => ({
+              eventTypeId: id,
+              label: q.label,
+              required: q.required,
+              order: q.order,
+            })),
+          })
+        }
+      })
+    }
+
     const event = await prisma.eventType.update({
       where: { id },
       data: {
@@ -197,6 +254,11 @@ export const updateEvent = async (req, res, next) => {
         maxNoticeDays: parsedMaxNotice,
         bufferBeforeMin: parsedBufferBefore,
         bufferAfterMin: parsedBufferAfter,
+      },
+      include: {
+        customQuestions: {
+          orderBy: { order: 'asc' },
+        },
       },
     })
 

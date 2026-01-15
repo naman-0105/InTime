@@ -35,6 +35,7 @@ export const PublicBooking = () => {
   const [step, setStep] = useState<'select' | 'form'>('select')
   const [guestName, setGuestName] = useState('')
   const [guestEmail, setGuestEmail] = useState('')
+  const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({})
   const [bookingSubmitting, setBookingSubmitting] = useState(false)
   const [bookingError, setBookingError] = useState('')
 
@@ -184,6 +185,24 @@ export const PublicBooking = () => {
     if (!username || !eventSlug || !selectedSlot) return
 
     setBookingError('')
+
+    if (event?.customQuestions && event.customQuestions.length > 0) {
+      for (const q of event.customQuestions) {
+        const key = q.id || q.label
+        const ans = (customAnswers[key] || '').trim()
+        if (q.required && !ans) {
+          setBookingError(`Please answer the required question: "${q.label}"`)
+          return
+        }
+      }
+    }
+
+    const formattedAnswers = (event?.customQuestions || []).map((q) => ({
+      questionId: q.id,
+      label: q.label,
+      value: (customAnswers[q.id || q.label] || '').trim(),
+    }))
+
     setBookingSubmitting(true)
 
     try {
@@ -192,6 +211,7 @@ export const PublicBooking = () => {
         guestEmail,
         startTime: selectedSlot.startTime,
         endTime: selectedSlot.endTime,
+        answers: formattedAnswers,
       })
 
       navigate(`/booked/${res.booking.token}`)
@@ -436,7 +456,7 @@ export const PublicBooking = () => {
               <div>
                 <h2 className="text-sm font-semibold text-neutral-900">Enter Your Details</h2>
                 <p className="text-xs text-neutral-500 mt-0.5">
-                  Provide your name and email to confirm the booking.
+                  Provide your information to confirm the booking.
                 </p>
               </div>
             </div>
@@ -451,7 +471,7 @@ export const PublicBooking = () => {
             <form onSubmit={handleBookingSubmit} className="space-y-4 max-w-md">
               <div>
                 <label className="block text-xs font-medium text-neutral-700 mb-1.5">
-                  Your Full Name
+                  Your Full Name <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-400">
@@ -470,7 +490,7 @@ export const PublicBooking = () => {
 
               <div>
                 <label className="block text-xs font-medium text-neutral-700 mb-1.5">
-                  Your Email Address
+                  Your Email Address <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-400">
@@ -489,6 +509,34 @@ export const PublicBooking = () => {
                   Confirmation will be sent to this email address.
                 </p>
               </div>
+
+              {event.customQuestions && event.customQuestions.length > 0 && (
+                <div className="space-y-4 pt-3 border-t border-neutral-100">
+                  {event.customQuestions.map((q) => {
+                    const key = q.id || q.label
+                    return (
+                      <div key={key}>
+                        <label className="block text-xs font-medium text-neutral-700 mb-1.5">
+                          {q.label} {q.required && <span className="text-red-500">*</span>}
+                        </label>
+                        <input
+                          type="text"
+                          required={q.required}
+                          value={customAnswers[key] || ''}
+                          onChange={(e) =>
+                            setCustomAnswers((prev) => ({
+                              ...prev,
+                              [key]: e.target.value,
+                            }))
+                          }
+                          placeholder="Your answer..."
+                          className="w-full px-3 h-10 bg-white border border-neutral-300 rounded-md text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-colors"
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
 
               <div className="pt-4 flex items-center space-x-3">
                 <button

@@ -44,6 +44,15 @@ export const getPublicEvent = async (req, res, next) => {
         durationMin: true,
         maxNoticeDays: true,
         isActive: true,
+        customQuestions: {
+          select: {
+            id: true,
+            label: true,
+            required: true,
+            order: true,
+          },
+          orderBy: { order: 'asc' },
+        },
       },
     })
 
@@ -64,6 +73,7 @@ export const getPublicEvent = async (req, res, next) => {
         description: event.description,
         durationMin: event.durationMin,
         maxNoticeDays: event.maxNoticeDays,
+        customQuestions: event.customQuestions,
       },
     })
   } catch (error) {
@@ -145,7 +155,7 @@ export const getPublicEventSlots = async (req, res, next) => {
 export const createBooking = async (req, res, next) => {
   try {
     const { username, eventSlug } = req.params
-    const { guestName, guestEmail, startTime, endTime } = req.body
+    const { guestName, guestEmail, startTime, endTime, answers } = req.body
 
     if (!guestName || !guestEmail || !startTime || !endTime) {
       return res.status(400).json({ error: 'Guest name, email, start time, and end time are required' })
@@ -202,6 +212,15 @@ export const createBooking = async (req, res, next) => {
         maxNoticeDays: true,
         bufferBeforeMin: true,
         bufferAfterMin: true,
+        customQuestions: {
+          select: {
+            id: true,
+            label: true,
+            required: true,
+            order: true,
+          },
+          orderBy: { order: 'asc' },
+        },
       },
     })
 
@@ -226,6 +245,40 @@ export const createBooking = async (req, res, next) => {
     const durationMinutes = Math.round((endUtc.getTime() - startUtc.getTime()) / (1000 * 60))
     if (durationMinutes !== event.durationMin) {
       return res.status(400).json({ error: `Booking duration must be exactly ${event.durationMin} minutes` })
+    }
+
+    const preparedAnswers = []
+    if (event.customQuestions && event.customQuestions.length > 0) {
+      for (const q of event.customQuestions) {
+        let answerVal = ''
+        if (Array.isArray(answers)) {
+          const found = answers.find(
+            (a) => a && (a.questionId === q.id || a.label === q.label)
+          )
+          if (found && typeof found.value === 'string') {
+            answerVal = found.value.trim()
+          }
+        } else if (answers && typeof answers === 'object') {
+          const raw = answers[q.id] || answers[q.label]
+          if (typeof raw === 'string') {
+            answerVal = raw.trim()
+          }
+        }
+
+        if (q.required && !answerVal) {
+          return res.status(400).json({
+            error: `Please answer the required question: "${q.label}"`,
+          })
+        }
+
+        if (answerVal) {
+          preparedAnswers.push({
+            questionId: q.id,
+            label: q.label,
+            value: answerVal,
+          })
+        }
+      }
     }
 
     try {
@@ -283,6 +336,9 @@ export const createBooking = async (req, res, next) => {
               startTime: startUtc,
               endTime: endUtc,
               status: 'CONFIRMED',
+              answers: {
+                create: preparedAnswers,
+              },
             },
             include: {
               eventType: {
@@ -296,6 +352,12 @@ export const createBooking = async (req, res, next) => {
                   name: true,
                   email: true,
                   timezone: true,
+                },
+              },
+              answers: {
+                select: {
+                  label: true,
+                  value: true,
                 },
               },
             },
@@ -438,4 +500,3 @@ export const cancelBookingByToken = async (req, res, next) => {
     next(error)
   }
 }
-

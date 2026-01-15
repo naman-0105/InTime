@@ -73,6 +73,21 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
       host.timezone || 'UTC'
     )
 
+    let answersHtml = ''
+    if (booking.answers && booking.answers.length > 0) {
+      answersHtml = `
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e5e7eb;">
+          <p style="margin: 0 0 6px 0; font-size: 13px; font-weight: 600; color: #374151;">Custom Question Responses:</p>
+          ${booking.answers
+            .map(
+              (a) =>
+                `<p style="margin: 0 0 4px 0; font-size: 13px;"><strong>${a.label}:</strong> ${a.value}</p>`
+            )
+            .join('')}
+        </div>
+      `
+    }
+
     const guestSubject = `Confirmed: ${eventType.name} with ${host.name}`
     const guestHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; color: #1f2937;">
@@ -84,6 +99,7 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
           <p style="margin: 0 0 8px 0;"><strong>Time:</strong> ${timeStr}</p>
           <p style="margin: 0 0 8px 0;"><strong>Host:</strong> ${host.name} (${host.email})</p>
           <p style="margin: 0;"><strong>Guest:</strong> ${booking.guestName} (${booking.guestEmail})</p>
+          ${answersHtml}
         </div>
         <p style="font-size: 14px; color: #6b7280;">Need to manage or cancel this booking? <a href="${clientUrl}/booked/${booking.token}" style="color: #2563eb; text-decoration: underline;">Click here to view booking</a>.</p>
       </div>
@@ -99,6 +115,7 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
           <p style="margin: 0 0 8px 0;"><strong>Date:</strong> ${dateStr}</p>
           <p style="margin: 0 0 8px 0;"><strong>Time:</strong> ${timeStr}</p>
           <p style="margin: 0;"><strong>Guest Details:</strong> ${booking.guestName} (${booking.guestEmail})</p>
+          ${answersHtml}
         </div>
         <p style="font-size: 14px; color: #6b7280;">View this meeting on your <a href="${clientUrl}/dashboard" style="color: #2563eb; text-decoration: underline;">InTime Dashboard</a>.</p>
       </div>

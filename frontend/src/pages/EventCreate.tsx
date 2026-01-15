@@ -2,7 +2,8 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { eventService } from '../services/eventService'
-import { ArrowLeft, Clock, ShieldAlert, Calendar, Hourglass } from 'lucide-react'
+import type { BookingQuestion } from '../types'
+import { ArrowLeft, Clock, ShieldAlert, Calendar, Hourglass, HelpCircle, Plus, Trash2 } from 'lucide-react'
 
 export const EventCreate = () => {
   const [name, setName] = useState('')
@@ -14,6 +15,7 @@ export const EventCreate = () => {
   const [maxNoticeDays, setMaxNoticeDays] = useState(60)
   const [bufferBeforeMin, setBufferBeforeMin] = useState(0)
   const [bufferAfterMin, setBufferAfterMin] = useState(0)
+  const [customQuestions, setCustomQuestions] = useState<BookingQuestion[]>([])
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -31,10 +33,43 @@ export const EventCreate = () => {
 
   const durationOptions = [15, 30, 45, 60]
 
+  const handleAddQuestion = () => {
+    setCustomQuestions((prev) => [
+      ...prev,
+      {
+        label: '',
+        required: false,
+        order: prev.length,
+      },
+    ])
+  }
+
+  const handleUpdateQuestion = (
+    index: number,
+    field: 'label' | 'required',
+    val: string | boolean
+  ) => {
+    setCustomQuestions((prev) =>
+      prev.map((q, i) => (i === index ? { ...q, [field]: val } : q))
+    )
+  }
+
+  const handleRemoveQuestion = (index: number) => {
+    setCustomQuestions((prev) =>
+      prev
+        .filter((_, i) => i !== index)
+        .map((q, idx) => ({ ...q, order: idx }))
+    )
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
     setIsSubmitting(true)
+
+    const validQuestions = customQuestions
+      .map((q, idx) => ({ ...q, label: q.label.trim(), order: idx }))
+      .filter((q) => q.label.length > 0)
 
     try {
       await eventService.createEvent({
@@ -47,6 +82,7 @@ export const EventCreate = () => {
         maxNoticeDays,
         bufferBeforeMin,
         bufferAfterMin,
+        customQuestions: validQuestions,
       })
       navigate('/events')
     } catch (err: unknown) {
@@ -267,6 +303,89 @@ export const EventCreate = () => {
                 </p>
               </div>
             </div>
+          </div>
+
+          <div className="pt-6 border-t border-neutral-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-neutral-900 flex items-center space-x-2">
+                  <HelpCircle className="w-4 h-4 text-neutral-700" />
+                  <span>Custom Booking Questions</span>
+                </h2>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  Ask guests additional questions when they schedule a meeting.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddQuestion}
+                className="h-8 px-2.5 rounded-md border border-neutral-200 hover:bg-neutral-50 text-neutral-700 text-xs font-medium flex items-center space-x-1.5 transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Question</span>
+              </button>
+            </div>
+
+            {customQuestions.length === 0 ? (
+              <div className="p-4 rounded-md border border-dashed border-neutral-200 bg-neutral-50 text-center">
+                <p className="text-xs text-neutral-500">
+                  No custom questions yet. Guests will only be asked for their name and email.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {customQuestions.map((q, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 bg-neutral-50 border border-neutral-200 rounded-md space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-neutral-700">
+                        Question #{idx + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveQuestion(idx)}
+                        className="w-7 h-7 rounded border border-neutral-200 hover:bg-red-50 text-neutral-500 hover:text-red-600 flex items-center justify-center transition-colors cursor-pointer"
+                        title="Remove question"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div>
+                      <input
+                        type="text"
+                        value={q.label}
+                        onChange={(e) =>
+                          handleUpdateQuestion(idx, 'label', e.target.value)
+                        }
+                        placeholder="e.g. What would you like to discuss?"
+                        className="w-full px-3 h-9 bg-white border border-neutral-300 rounded-md text-xs text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+                      />
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id={`req-${idx}`}
+                        checked={q.required}
+                        onChange={(e) =>
+                          handleUpdateQuestion(idx, 'required', e.target.checked)
+                        }
+                        className="h-3.5 w-3.5 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900"
+                      />
+                      <label
+                        htmlFor={`req-${idx}`}
+                        className="text-xs font-medium text-neutral-700 cursor-pointer"
+                      >
+                        Required for guest
+                      </label>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center space-x-2 pt-2">

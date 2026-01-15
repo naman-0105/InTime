@@ -31,24 +31,39 @@ model User {
 }
 
 model EventType {
-  id              String    @id @default(uuid()) @db.Uuid
-  userId          String    @map("user_id") @db.Uuid
+  id              String            @id @default(uuid()) @db.Uuid
+  userId          String            @map("user_id") @db.Uuid
   name            String
   slug            String
   description     String?
-  durationMin     Int       @map("duration_min")
-  isActive        Boolean   @default(true) @map("is_active")
-  minNoticeMin    Int       @default(0) @map("min_notice_min")
-  maxNoticeDays   Int       @default(60) @map("max_notice_days")
-  bufferBeforeMin Int       @default(0) @map("buffer_before_min")
-  bufferAfterMin  Int       @default(0) @map("buffer_after_min")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  durationMin     Int               @map("duration_min")
+  isActive        Boolean           @default(true) @map("is_active")
+  minNoticeMin    Int               @default(0) @map("min_notice_min")
+  maxNoticeDays   Int               @default(60) @map("max_notice_days")
+  bufferBeforeMin Int               @default(0) @map("buffer_before_min")
+  bufferAfterMin  Int               @default(0) @map("buffer_after_min")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookings        Booking[]
+  customQuestions BookingQuestion[]
 
   @@unique([userId, slug])
   @@map("event_types")
+}
+
+model BookingQuestion {
+  id          String          @id @default(uuid()) @db.Uuid
+  eventTypeId String          @map("event_type_id") @db.Uuid
+  label       String
+  required    Boolean         @default(false)
+  order       Int             @default(0)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  eventType   EventType       @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  answers     BookingAnswer[]
+
+  @@index([eventTypeId, order])
+  @@map("booking_questions")
 }
 
 model AvailabilityRule {
@@ -78,21 +93,36 @@ model AvailabilityOverride {
 }
 
 model Booking {
-  id          String        @id @default(uuid()) @db.Uuid
-  token       String        @unique
-  eventTypeId String        @map("event_type_id") @db.Uuid
-  hostId      String        @map("host_id") @db.Uuid
-  guestName   String        @map("guest_name")
-  guestEmail  String        @map("guest_email")
-  startTime   DateTime      @map("start_time") @db.Timestamptz(6)
-  endTime     DateTime      @map("end_time") @db.Timestamptz(6)
-  status      BookingStatus @default(CONFIRMED)
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-  eventType   EventType     @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
-  host        User          @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  id          String          @id @default(uuid()) @db.Uuid
+  token       String          @unique
+  eventTypeId String          @map("event_type_id") @db.Uuid
+  hostId      String          @map("host_id") @db.Uuid
+  guestName   String          @map("guest_name")
+  guestEmail  String          @map("guest_email")
+  startTime   DateTime        @map("start_time") @db.Timestamptz(6)
+  endTime     DateTime        @map("end_time") @db.Timestamptz(6)
+  status      BookingStatus   @default(CONFIRMED)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  eventType   EventType       @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  host        User            @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  answers     BookingAnswer[]
 
   @@index([hostId, startTime, endTime])
   @@index([token])
   @@map("bookings")
+}
+
+model BookingAnswer {
+  id         String           @id @default(uuid()) @db.Uuid
+  bookingId  String           @map("booking_id") @db.Uuid
+  questionId String?          @map("question_id") @db.Uuid
+  label      String
+  value      String
+  createdAt  DateTime         @default(now()) @map("created_at")
+  booking    Booking          @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  question   BookingQuestion? @relation(fields: [questionId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+  @@map("booking_answers")
 }

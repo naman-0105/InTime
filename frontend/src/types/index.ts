@@ -12,6 +12,20 @@ export interface AuthResponse {
   user: User
 }
 
+export interface BookingQuestion {
+  id?: string
+  label: string
+  required: boolean
+  order: number
+}
+
+export interface BookingAnswer {
+  id?: string
+  questionId?: string | null
+  label: string
+  value: string
+}
+
 export interface EventType {
   id: string
   userId: string
@@ -26,6 +40,7 @@ export interface EventType {
   bufferAfterMin: number
   createdAt: string
   updatedAt: string
+  customQuestions?: BookingQuestion[]
 }
 
 export interface EventResponse {
@@ -80,6 +95,7 @@ export interface PublicEvent {
   description: string | null
   durationMin: number
   maxNoticeDays?: number
+  customQuestions?: BookingQuestion[]
 }
 
 export interface PublicEventResponse {
@@ -123,6 +139,7 @@ export interface Booking {
     username?: string
     timezone: string
   }
+  answers?: BookingAnswer[]
 }
 
 export interface BookingResponse {
@@ -136,4 +153,3 @@ export interface CreatedBookingResponse {
 export interface BookingsResponse {
   bookings: Booking[]
 }
-

@@ -38,6 +38,7 @@ export const publicService = {
       guestEmail: string
       startTime: string
       endTime: string
+      answers?: Array<{ questionId?: string; label?: string; value: string }>
     }
   ): Promise<CreatedBookingResponse> {
     const res = await fetch(`${API_BASE}/${username}/${eventSlug}/book`, {

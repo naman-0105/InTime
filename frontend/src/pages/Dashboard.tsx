@@ -258,9 +258,9 @@ export const Dashboard = () => {
                 return (
                   <div
                     key={b.id}
-                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-neutral-50 transition-colors"
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-4 hover:bg-neutral-50 transition-colors"
                   >
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 flex-1">
                       <div className="flex items-center space-x-2">
                         <span className="font-semibold text-xs text-neutral-900">
                           {b.eventType?.name || 'Scheduled Meeting'}
@@ -299,10 +299,22 @@ export const Dashboard = () => {
                           <span>{b.guestEmail}</span>
                         </div>
                       </div>
+
+                      {b.answers && b.answers.length > 0 && (
+                        <div className="mt-3 pt-2.5 border-t border-neutral-100 space-y-1 bg-neutral-50/80 p-2.5 rounded">
+                          <p className="text-[11px] font-semibold text-neutral-700">Guest Responses:</p>
+                          {b.answers.map((ans) => (
+                            <div key={ans.id || ans.label} className="text-xs">
+                              <span className="font-medium text-neutral-700">{ans.label}: </span>
+                              <span className="text-neutral-600">{ans.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {b.status === 'CONFIRMED' && (
-                      <div className="flex items-center sm:self-center">
+                      <div className="flex items-center sm:self-center shrink-0">
                         {confirmingCancelId === b.id ? (
                           <div className="flex items-center space-x-2 bg-neutral-100 p-1.5 rounded-md">
                             <span className="text-[11px] font-medium text-neutral-700 mr-1">

@@ -39,6 +39,13 @@ export const getBookings = async (req, res, next) => {
             durationMin: true,
           },
         },
+        answers: {
+          select: {
+            id: true,
+            label: true,
+            value: true,
+          },
+        },
       },
       orderBy: {
         startTime: type === 'past' ? 'desc' : 'asc',
@@ -75,6 +82,13 @@ export const getBookingById = async (req, res, next) => {
             slug: true,
             durationMin: true,
             description: true,
+          },
+        },
+        answers: {
+          select: {
+            id: true,
+            label: true,
+            value: true,
           },
         },
       },
@@ -123,10 +137,9 @@ export const cancelBooking = async (req, res, next) => {
         status: true,
         eventType: {
           select: {
-            id: true,
             name: true,
-            slug: true,
             durationMin: true,
+            description: true,
           },
         },
         host: {
@@ -135,6 +148,13 @@ export const cancelBooking = async (req, res, next) => {
             email: true,
             username: true,
             timezone: true,
+          },
+        },
+        answers: {
+          select: {
+            id: true,
+            label: true,
+            value: true,
           },
         },
       },

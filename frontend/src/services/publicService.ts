@@ -72,4 +72,23 @@ export const publicService = {
     }
     return json
   },
+
+  async rescheduleBooking(
+    token: string,
+    data: {
+      startTime: string
+      endTime: string
+    }
+  ): Promise<BookingResponse> {
+    const res = await fetch(`${API_BASE}/bookings/${token}/reschedule`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      throw new Error(json.error || 'Failed to reschedule booking')
+    }
+    return json
+  },
 }

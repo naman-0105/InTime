@@ -138,6 +138,76 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
   }
 }
 
+export const sendBookingRescheduledEmails = async ({
+  booking,
+  host,
+  eventType,
+  previousStartTime,
+  previousEndTime,
+}) => {
+  try {
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'
+    const { dateStr: newDateStr, timeStr: newTimeStr } = formatTimeRange(
+      booking.startTime,
+      booking.endTime,
+      host.timezone || 'UTC'
+    )
+    const { dateStr: prevDateStr, timeStr: prevTimeStr } = formatTimeRange(
+      previousStartTime,
+      previousEndTime,
+      host.timezone || 'UTC'
+    )
+
+    const guestSubject = `Rescheduled: ${eventType.name} with ${host.name}`
+    const guestHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; color: #1f2937;">
+        <h2 style="color: #111827; margin-top: 0;">Meeting Rescheduled</h2>
+        <p>Your meeting with <strong>${host.name}</strong> has been successfully rescheduled.</p>
+        <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 20px 0;">
+          <p style="margin: 0 0 8px 0;"><strong>Event:</strong> ${eventType.name}</p>
+          <p style="margin: 0 0 8px 0;"><strong>New Date:</strong> ${newDateStr}</p>
+          <p style="margin: 0 0 8px 0;"><strong>New Time:</strong> ${newTimeStr}</p>
+          <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px;"><strong>Previous Time:</strong> ${prevDateStr} at ${prevTimeStr}</p>
+          <p style="margin: 0 0 8px 0;"><strong>Host:</strong> ${host.name} (${host.email})</p>
+          <p style="margin: 0;"><strong>Guest:</strong> ${booking.guestName} (${booking.guestEmail})</p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280;">Need to manage or cancel this booking? <a href="${clientUrl}/booked/${booking.token}" style="color: #2563eb; text-decoration: underline;">Click here to view booking</a>.</p>
+      </div>
+    `
+
+    const hostSubject = `Rescheduled: ${eventType.name} with ${booking.guestName}`
+    const hostHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; color: #1f2937;">
+        <h2 style="color: #111827; margin-top: 0;">Meeting Rescheduled</h2>
+        <p><strong>${booking.guestName}</strong> rescheduled their meeting with you.</p>
+        <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 20px 0;">
+          <p style="margin: 0 0 8px 0;"><strong>Event:</strong> ${eventType.name}</p>
+          <p style="margin: 0 0 8px 0;"><strong>New Date:</strong> ${newDateStr}</p>
+          <p style="margin: 0 0 8px 0;"><strong>New Time:</strong> ${newTimeStr}</p>
+          <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px;"><strong>Previous Time:</strong> ${prevDateStr} at ${prevTimeStr}</p>
+          <p style="margin: 0;"><strong>Guest Details:</strong> ${booking.guestName} (${booking.guestEmail})</p>
+        </div>
+        <p style="font-size: 14px; color: #6b7280;">View this meeting on your <a href="${clientUrl}/dashboard" style="color: #2563eb; text-decoration: underline;">InTime Dashboard</a>.</p>
+      </div>
+    `
+
+    await Promise.allSettled([
+      sendEmail({
+        to: booking.guestEmail,
+        subject: guestSubject,
+        html: guestHtml,
+      }),
+      sendEmail({
+        to: host.email,
+        subject: hostSubject,
+        html: hostHtml,
+      }),
+    ])
+  } catch (error) {
+    console.error('Failed to send booking reschedule emails:', error)
+  }
+}
+
 export const sendBookingCancellationEmails = async ({ booking, host, eventType }) => {
   try {
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'

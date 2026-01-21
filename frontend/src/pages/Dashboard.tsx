@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { AppLayout } from '../components/AppLayout'
 import { bookingService } from '../services/bookingService'
+import { publicService } from '../services/publicService'
 import { eventService } from '../services/eventService'
-import type { Booking, EventType } from '../types'
+import type { Booking, EventType, TimeSlot } from '../types'
 import {
   Calendar,
   Clock,
@@ -15,6 +16,12 @@ import {
   AtSign,
   ArrowRight,
   UserCheck,
+  CalendarSync,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  AlertCircle,
+  X,
 } from 'lucide-react'
 
 export const Dashboard = () => {
@@ -28,6 +35,15 @@ export const Dashboard = () => {
   const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionSuccess, setActionSuccess] = useState<string | null>(null)
+
+  const [reschedulingBooking, setReschedulingBooking] = useState<Booking | null>(null)
+  const [currentMonth, setCurrentMonth] = useState(() => new Date())
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [slots, setSlots] = useState<TimeSlot[]>([])
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null)
+  const [reschedulingSubmitting, setReschedulingSubmitting] = useState(false)
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null)
 
   const loadDashboardData = async () => {
     try {
@@ -49,6 +65,34 @@ export const Dashboard = () => {
     loadDashboardData()
   }, [bookingTab])
 
+  useEffect(() => {
+    if (!reschedulingBooking || !user?.username || !reschedulingBooking.eventType?.slug || !selectedDate) {
+      setSlots([])
+      setSelectedSlot(null)
+      return
+    }
+
+    const loadSlots = async () => {
+      try {
+        setLoadingSlots(true)
+        setSelectedSlot(null)
+        setRescheduleError(null)
+        const data = await publicService.getSlots(
+          user.username,
+          reschedulingBooking.eventType!.slug!,
+          selectedDate
+        )
+        setSlots(data.slots)
+      } catch {
+        setSlots([])
+      } finally {
+        setLoadingSlots(false)
+      }
+    }
+
+    loadSlots()
+  }, [reschedulingBooking, user, selectedDate])
+
   const handleCancelBooking = async (bookingId: string) => {
     try {
       setCancellingId(bookingId)
@@ -68,6 +112,51 @@ export const Dashboard = () => {
       }
     } finally {
       setCancellingId(null)
+    }
+  }
+
+  const handleOpenReschedule = (booking: Booking) => {
+    setReschedulingBooking(booking)
+    setSelectedDate(null)
+    setSelectedSlot(null)
+    setSlots([])
+    setRescheduleError(null)
+    setCurrentMonth(new Date())
+    setActionError(null)
+    setActionSuccess(null)
+  }
+
+  const handleCloseReschedule = () => {
+    setReschedulingBooking(null)
+    setSelectedDate(null)
+    setSelectedSlot(null)
+    setSlots([])
+    setRescheduleError(null)
+  }
+
+  const handleConfirmReschedule = async () => {
+    if (!reschedulingBooking || !selectedSlot) return
+    setRescheduleError(null)
+    setReschedulingSubmitting(true)
+
+    try {
+      const res = await bookingService.rescheduleBooking(reschedulingBooking.id, {
+        startTime: selectedSlot.startTime,
+        endTime: selectedSlot.endTime,
+      })
+      setBookings((prev) =>
+        prev.map((b) => (b.id === reschedulingBooking.id ? res.booking : b))
+      )
+      setActionSuccess(`Meeting with ${reschedulingBooking.guestName} rescheduled successfully`)
+      handleCloseReschedule()
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setRescheduleError(err.message)
+      } else {
+        setRescheduleError('Failed to reschedule booking')
+      }
+    } finally {
+      setReschedulingSubmitting(false)
     }
   }
 
@@ -107,6 +196,76 @@ export const Dashboard = () => {
     } catch {
       return { dateStr: startIso, timeStr: endIso }
     }
+  }
+
+  const formatSlotTime = (timeStr: string) => {
+    const [h, m] = timeStr.split(':').map(Number)
+    const period = h >= 12 ? 'PM' : 'AM'
+    const displayH = h % 12 === 0 ? 12 : h % 12
+    return `${displayH}:${String(m).padStart(2, '0')} ${period}`
+  }
+
+  const nextMonth = () => {
+    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
+  }
+
+  const prevMonth = () => {
+    const today = new Date()
+    if (
+      currentMonth.getFullYear() === today.getFullYear() &&
+      currentMonth.getMonth() === today.getMonth()
+    ) {
+      return
+    }
+    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
+  }
+
+  const getDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month + 1, 0).getDate()
+  }
+
+  const getFirstDayOfMonth = (year: number, month: number) => {
+    return new Date(year, month, 1).getDay()
+  }
+
+  const year = currentMonth.getFullYear()
+  const month = currentMonth.getMonth()
+  const daysInMonth = getDaysInMonth(year, month)
+  const firstDay = getFirstDayOfMonth(year, month)
+
+  const monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ]
+
+  const dayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const isDateDisabled = (dayNumber: number) => {
+    const d = new Date(year, month, dayNumber)
+    d.setHours(0, 0, 0, 0)
+    if (d.getTime() < today.getTime()) {
+      return true
+    }
+    return false
+  }
+
+  const formatDateKey = (dayNumber: number) => {
+    const mm = String(month + 1).padStart(2, '0')
+    const dd = String(dayNumber).padStart(2, '0')
+    return `${year}-${mm}-${dd}`
   }
 
   const upcomingCount = bookings.filter((b) => b.status === 'CONFIRMED').length
@@ -314,7 +473,16 @@ export const Dashboard = () => {
                     </div>
 
                     {b.status === 'CONFIRMED' && (
-                      <div className="flex items-center sm:self-center shrink-0">
+                      <div className="flex items-center space-x-2 sm:self-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenReschedule(b)}
+                          className="text-xs font-medium text-neutral-700 hover:text-neutral-900 border border-neutral-200 hover:border-neutral-400 bg-white px-3 py-1.5 rounded-md transition-colors flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                        >
+                          <CalendarSync className="w-3.5 h-3.5 text-neutral-500" />
+                          <span>Reschedule</span>
+                        </button>
+
                         {confirmingCancelId === b.id ? (
                           <div className="flex items-center space-x-2 bg-neutral-100 p-1.5 rounded-md">
                             <span className="text-[11px] font-medium text-neutral-700 mr-1">
@@ -347,7 +515,7 @@ export const Dashboard = () => {
                             }}
                             className="text-xs font-medium text-neutral-600 hover:text-red-700 border border-neutral-200 hover:border-red-200 px-3 py-1.5 rounded-md transition-colors cursor-pointer"
                           >
-                            Cancel Meeting
+                            Cancel
                           </button>
                         )}
                       </div>
@@ -416,6 +584,193 @@ export const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {reschedulingBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/50 backdrop-blur-xs">
+          <div className="bg-white rounded-xl border border-neutral-200 shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-5">
+            <div className="flex items-start justify-between border-b border-neutral-100 pb-3">
+              <div>
+                <h2 className="text-base font-semibold text-neutral-900 flex items-center space-x-2">
+                  <CalendarSync className="w-4 h-4 text-neutral-700" />
+                  <span>Reschedule Meeting</span>
+                </h2>
+                <p className="text-xs text-neutral-500 mt-0.5">
+                  {reschedulingBooking.guestName} — {reschedulingBooking.eventType?.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseReschedule}
+                className="w-7 h-7 rounded-md border border-neutral-200 hover:bg-neutral-100 flex items-center justify-center text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {rescheduleError && (
+              <div className="p-3.5 rounded-md border border-red-200 bg-red-50 text-red-700 text-xs flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{rescheduleError}</span>
+              </div>
+            )}
+
+            <div className="p-3 bg-neutral-50 rounded-md border border-neutral-200 text-xs text-neutral-600 space-y-1">
+              <p className="font-semibold text-neutral-800">Current Scheduled Time:</p>
+              <p>
+                {formatBookingDateTime(
+                  reschedulingBooking.startTime,
+                  reschedulingBooking.endTime,
+                  user.timezone
+                ).dateStr}{' '}
+                at{' '}
+                {formatBookingDateTime(
+                  reschedulingBooking.startTime,
+                  reschedulingBooking.endTime,
+                  user.timezone
+                ).timeStr}{' '}
+                ({user.timezone})
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="border border-neutral-200 rounded-lg p-4 bg-white">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-sm font-semibold text-neutral-900">
+                    {monthNames[month]} {year}
+                  </span>
+                  <div className="flex items-center space-x-1">
+                    <button
+                      type="button"
+                      onClick={prevMonth}
+                      disabled={
+                        currentMonth.getFullYear() === today.getFullYear() &&
+                        currentMonth.getMonth() === today.getMonth()
+                      }
+                      className="w-7 h-7 rounded border border-neutral-200 hover:bg-neutral-50 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={nextMonth}
+                      className="w-7 h-7 rounded border border-neutral-200 hover:bg-neutral-50 flex items-center justify-center text-neutral-600 transition-colors cursor-pointer"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-7 gap-1 text-center mb-1">
+                  {dayHeaders.map((dh) => (
+                    <div key={dh} className="text-[11px] font-medium text-neutral-400 py-1">
+                      {dh}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-7 gap-1">
+                  {Array.from({ length: firstDay }).map((_, i) => (
+                    <div key={`empty-${i}`} className="h-9" />
+                  ))}
+
+                  {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const dayNum = i + 1
+                    const dateKey = formatDateKey(dayNum)
+                    const disabled = isDateDisabled(dayNum)
+                    const isSelected = selectedDate === dateKey
+
+                    return (
+                      <button
+                        key={dateKey}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => setSelectedDate(dateKey)}
+                        className={`h-9 rounded-md text-xs font-medium flex items-center justify-center transition-colors cursor-pointer ${
+                          disabled
+                            ? 'text-neutral-300 cursor-not-allowed'
+                            : isSelected
+                            ? 'bg-neutral-900 text-white font-semibold'
+                            : 'text-neutral-800 hover:bg-neutral-100'
+                        }`}
+                      >
+                        {dayNum}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {selectedDate && (
+                <div className="border border-neutral-200 rounded-lg p-4 bg-white space-y-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-900">
+                    Available Times for {selectedDate}
+                  </h3>
+
+                  {loadingSlots ? (
+                    <div className="py-6 text-center text-neutral-500 text-xs">
+                      Loading available slots...
+                    </div>
+                  ) : slots.length === 0 ? (
+                    <div className="py-6 text-center text-neutral-500 text-xs">
+                      No available slots on this date.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
+                      {slots.map((slot) => {
+                        const isSelected = selectedSlot?.time === slot.time
+                        return (
+                          <button
+                            key={slot.time}
+                            type="button"
+                            onClick={() => setSelectedSlot(slot)}
+                            className={`h-9 px-2 rounded-md text-xs font-medium border flex items-center justify-between transition-colors cursor-pointer ${
+                              isSelected
+                                ? 'bg-neutral-900 border-neutral-900 text-white shadow-xs'
+                                : 'bg-white border-neutral-300 text-neutral-800 hover:border-neutral-900 hover:bg-neutral-50'
+                            }`}
+                          >
+                            <span>{formatSlotTime(slot.time)}</span>
+                            {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {selectedSlot && (
+              <div className="p-3.5 border border-emerald-200 rounded-md text-xs text-emerald-900 space-y-1">
+                <p className="font-semibold">New Selected Slot:</p>
+                <p>
+                  {selectedDate} at {formatSlotTime(selectedSlot.time)} ({user.timezone})
+                </p>
+              </div>
+            )}
+
+            <div className="pt-2 flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={handleCloseReschedule}
+                className="h-10 px-4 rounded-md border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-medium cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!selectedSlot || reschedulingSubmitting}
+                onClick={handleConfirmReschedule}
+                className="flex-1 h-10 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-medium rounded-md flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <span>{reschedulingSubmitting ? 'Rescheduling...' : 'Confirm Reschedule'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }
+

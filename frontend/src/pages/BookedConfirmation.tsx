@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { publicService } from '../services/publicService'
+import { generateGoogleCalendarUrl } from '../utils/calendar'
 import type { Booking, TimeSlot } from '../types'
 import {
   CheckCircle2,
   XCircle,
   Calendar as CalendarIcon,
+  CalendarPlus,
   Clock,
   Globe,
   User,
@@ -365,57 +367,93 @@ export const BookedConfirmation = () => {
                   <span>Email: {booking.guestEmail}</span>
                 </div>
               </div>
+
+              {booking.answers && booking.answers.length > 0 && (
+                <div className="p-4 space-y-1.5 bg-neutral-50/80">
+                  <p className="text-[11px] font-semibold text-neutral-700">Your Responses:</p>
+                  {booking.answers.map((ans) => (
+                    <div key={ans.id || ans.label} className="text-xs">
+                      <span className="font-medium text-neutral-700">{ans.label}: </span>
+                      <span className="text-neutral-600">{ans.value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {!isCancelled && (
-              <div className="border border-neutral-200 rounded-lg p-4 bg-neutral-50/50 space-y-3">
-                {!showCancelConfirm ? (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsRescheduling(true)
-                        setRescheduleError('')
-                      }}
-                      className="h-9 px-4 rounded-md border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-800 text-xs font-medium flex items-center justify-center space-x-2 transition-colors cursor-pointer shadow-xs"
-                    >
-                      <CalendarSync className="w-3.5 h-3.5" />
-                      <span>Reschedule Meeting</span>
-                    </button>
+              <div className="space-y-3">
+                <a
+                  href={generateGoogleCalendarUrl({
+                    title: `${booking.eventType?.name || 'Meeting'} with ${booking.host?.name || 'Host'}`,
+                    startTime: booking.startTime,
+                    endTime: booking.endTime,
+                    description: booking.eventType?.description,
+                    guestName: booking.guestName,
+                    guestEmail: booking.guestEmail,
+                    hostName: booking.host?.name || 'Host',
+                    hostEmail: booking.host?.email,
+                    location: 'InTime Meeting',
+                    manageUrl: token ? `${window.location.origin}/booked/${token}` : undefined,
+                    answers: booking.answers,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full h-10 px-4 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-medium flex items-center justify-center space-x-2 transition-colors cursor-pointer shadow-xs"
+                >
+                  <CalendarPlus className="w-4 h-4" />
+                  <span>Add to Google Calendar</span>
+                </a>
 
-                    <button
-                      type="button"
-                      onClick={() => setShowCancelConfirm(true)}
-                      className="text-xs font-medium text-red-600 hover:text-red-700 hover:underline cursor-pointer self-center"
-                    >
-                      Cancel booking
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-xs font-medium text-neutral-800">
-                      Are you sure you want to cancel this booking?
-                    </p>
-                    <div className="flex items-center space-x-2">
+                <div className="border border-neutral-200 rounded-lg p-4 bg-neutral-50/50 space-y-3">
+                  {!showCancelConfirm ? (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <button
                         type="button"
-                        disabled={cancelling}
-                        onClick={handleCancelBooking}
-                        className="h-8 px-3 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
+                        onClick={() => {
+                          setIsRescheduling(true)
+                          setRescheduleError('')
+                        }}
+                        className="h-9 px-4 rounded-md border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-800 text-xs font-medium flex items-center justify-center space-x-2 transition-colors cursor-pointer shadow-xs"
                       >
-                        {cancelling ? 'Cancelling...' : 'Yes, Cancel'}
+                        <CalendarSync className="w-3.5 h-3.5" />
+                        <span>Reschedule Meeting</span>
                       </button>
+
                       <button
                         type="button"
-                        disabled={cancelling}
-                        onClick={() => setShowCancelConfirm(false)}
-                        className="h-8 px-3 text-xs font-medium text-neutral-700 hover:bg-neutral-200 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
+                        onClick={() => setShowCancelConfirm(true)}
+                        className="text-xs font-medium text-red-600 hover:text-red-700 hover:underline cursor-pointer self-center"
                       >
-                        Keep Booking
+                        Cancel booking
                       </button>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-xs font-medium text-neutral-800">
+                        Are you sure you want to cancel this booking?
+                      </p>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          type="button"
+                          disabled={cancelling}
+                          onClick={handleCancelBooking}
+                          className="h-8 px-3 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          {cancelling ? 'Cancelling...' : 'Yes, Cancel'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={cancelling}
+                          onClick={() => setShowCancelConfirm(false)}
+                          className="h-8 px-3 text-xs font-medium text-neutral-700 hover:bg-neutral-200 rounded-md transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          Keep Booking
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

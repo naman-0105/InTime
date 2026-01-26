@@ -617,6 +617,13 @@ export const getBookingByToken = async (req, res, next) => {
             timezone: true,
           },
         },
+        answers: {
+          select: {
+            id: true,
+            label: true,
+            value: true,
+          },
+        },
       },
     })
 

@@ -5,6 +5,7 @@ import { AppLayout } from '../components/AppLayout'
 import { bookingService } from '../services/bookingService'
 import { publicService } from '../services/publicService'
 import { eventService } from '../services/eventService'
+import { generateGoogleCalendarUrl } from '../utils/calendar'
 import type { Booking, EventType, TimeSlot } from '../types'
 import {
   Calendar,
@@ -17,6 +18,7 @@ import {
   ArrowRight,
   UserCheck,
   CalendarSync,
+  CalendarPlus,
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
@@ -474,6 +476,28 @@ export const Dashboard = () => {
 
                     {b.status === 'CONFIRMED' && (
                       <div className="flex items-center space-x-2 sm:self-center shrink-0">
+                        <a
+                          href={generateGoogleCalendarUrl({
+                            title: `${b.eventType?.name || 'Meeting'} with ${b.guestName}`,
+                            startTime: b.startTime,
+                            endTime: b.endTime,
+                            description: b.eventType?.description,
+                            guestName: b.guestName,
+                            guestEmail: b.guestEmail,
+                            hostName: user.name,
+                            hostEmail: user.email,
+                            location: 'InTime Meeting',
+                            answers: b.answers,
+                          })}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-medium text-neutral-700 hover:text-neutral-900 border border-neutral-200 hover:border-neutral-400 bg-white px-2.5 py-1.5 rounded-md transition-colors flex items-center space-x-1.5 cursor-pointer shadow-xs"
+                          title="Add to Google Calendar"
+                        >
+                          <CalendarPlus className="w-3.5 h-3.5 text-neutral-500" />
+                          <span className="hidden sm:inline">Add to Calendar</span>
+                        </a>
+
                         <button
                           type="button"
                           onClick={() => handleOpenReschedule(b)}

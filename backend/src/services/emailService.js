@@ -64,6 +64,58 @@ const formatTimeRange = (startTime, endTime, timezone = 'UTC') => {
   }
 }
 
+export const generateGoogleCalendarUrl = ({
+  title,
+  startTime,
+  endTime,
+  description,
+  guestName,
+  guestEmail,
+  hostName,
+  hostEmail,
+  location = 'InTime Meeting',
+  manageUrl,
+  answers = [],
+}) => {
+  const startStr = new Date(startTime).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
+  const endStr = new Date(endTime).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
+
+  let details = ''
+  if (description) {
+    details += `${description}\n\n`
+  }
+  details += `Host: ${hostName} (${hostEmail})\n`
+  details += `Guest: ${guestName} (${guestEmail})\n`
+
+  if (answers && answers.length > 0) {
+    details += `\nCustom Question Responses:\n`
+    for (const ans of answers) {
+      details += `- ${ans.label}: ${ans.value}\n`
+    }
+  }
+
+  if (manageUrl) {
+    details += `\nManage or Reschedule Meeting:\n${manageUrl}\n`
+  }
+
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title,
+    dates: `${startStr}/${endStr}`,
+    details,
+  })
+
+  if (location) {
+    params.set('location', location)
+  }
+
+  if (guestEmail) {
+    params.set('add', guestEmail)
+  }
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`
+}
+
 export const sendBookingConfirmationEmails = async ({ booking, host, eventType }) => {
   try {
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'
@@ -72,6 +124,20 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
       booking.endTime,
       host.timezone || 'UTC'
     )
+
+    const googleCalendarUrl = generateGoogleCalendarUrl({
+      title: `${eventType.name} with ${host.name}`,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      description: eventType.description,
+      guestName: booking.guestName,
+      guestEmail: booking.guestEmail,
+      hostName: host.name,
+      hostEmail: host.email,
+      location: 'InTime Meeting',
+      manageUrl: `${clientUrl}/booked/${booking.token}`,
+      answers: booking.answers,
+    })
 
     let answersHtml = ''
     if (booking.answers && booking.answers.length > 0) {
@@ -101,6 +167,11 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
           <p style="margin: 0;"><strong>Guest:</strong> ${booking.guestName} (${booking.guestEmail})</p>
           ${answersHtml}
         </div>
+        <div style="margin: 20px 0;">
+          <a href="${googleCalendarUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #111827; color: #ffffff; padding: 10px 18px; border-radius: 6px; font-weight: 500; font-size: 13px; text-decoration: none;">
+            📅 Add to Google Calendar
+          </a>
+        </div>
         <p style="font-size: 14px; color: #6b7280;">Need to manage or cancel this booking? <a href="${clientUrl}/booked/${booking.token}" style="color: #2563eb; text-decoration: underline;">Click here to view booking</a>.</p>
       </div>
     `
@@ -116,6 +187,11 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
           <p style="margin: 0 0 8px 0;"><strong>Time:</strong> ${timeStr}</p>
           <p style="margin: 0;"><strong>Guest Details:</strong> ${booking.guestName} (${booking.guestEmail})</p>
           ${answersHtml}
+        </div>
+        <div style="margin: 20px 0;">
+          <a href="${googleCalendarUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #111827; color: #ffffff; padding: 10px 18px; border-radius: 6px; font-weight: 500; font-size: 13px; text-decoration: none;">
+            📅 Add to Google Calendar
+          </a>
         </div>
         <p style="font-size: 14px; color: #6b7280;">View this meeting on your <a href="${clientUrl}/dashboard" style="color: #2563eb; text-decoration: underline;">InTime Dashboard</a>.</p>
       </div>
@@ -158,6 +234,20 @@ export const sendBookingRescheduledEmails = async ({
       host.timezone || 'UTC'
     )
 
+    const googleCalendarUrl = generateGoogleCalendarUrl({
+      title: `${eventType.name} with ${host.name}`,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      description: eventType.description,
+      guestName: booking.guestName,
+      guestEmail: booking.guestEmail,
+      hostName: host.name,
+      hostEmail: host.email,
+      location: 'InTime Meeting',
+      manageUrl: `${clientUrl}/booked/${booking.token}`,
+      answers: booking.answers,
+    })
+
     const guestSubject = `Rescheduled: ${eventType.name} with ${host.name}`
     const guestHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; color: #1f2937;">
@@ -170,6 +260,11 @@ export const sendBookingRescheduledEmails = async ({
           <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px;"><strong>Previous Time:</strong> ${prevDateStr} at ${prevTimeStr}</p>
           <p style="margin: 0 0 8px 0;"><strong>Host:</strong> ${host.name} (${host.email})</p>
           <p style="margin: 0;"><strong>Guest:</strong> ${booking.guestName} (${booking.guestEmail})</p>
+        </div>
+        <div style="margin: 20px 0;">
+          <a href="${googleCalendarUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #111827; color: #ffffff; padding: 10px 18px; border-radius: 6px; font-weight: 500; font-size: 13px; text-decoration: none;">
+            Update on Google Calendar
+          </a>
         </div>
         <p style="font-size: 14px; color: #6b7280;">Need to manage or cancel this booking? <a href="${clientUrl}/booked/${booking.token}" style="color: #2563eb; text-decoration: underline;">Click here to view booking</a>.</p>
       </div>
@@ -186,6 +281,11 @@ export const sendBookingRescheduledEmails = async ({
           <p style="margin: 0 0 8px 0;"><strong>New Time:</strong> ${newTimeStr}</p>
           <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px;"><strong>Previous Time:</strong> ${prevDateStr} at ${prevTimeStr}</p>
           <p style="margin: 0;"><strong>Guest Details:</strong> ${booking.guestName} (${booking.guestEmail})</p>
+        </div>
+        <div style="margin: 20px 0;">
+          <a href="${googleCalendarUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #111827; color: #ffffff; padding: 10px 18px; border-radius: 6px; font-weight: 500; font-size: 13px; text-decoration: none;">
+            Update on Google Calendar
+          </a>
         </div>
         <p style="font-size: 14px; color: #6b7280;">View this meeting on your <a href="${clientUrl}/dashboard" style="color: #2563eb; text-decoration: underline;">InTime Dashboard</a>.</p>
       </div>

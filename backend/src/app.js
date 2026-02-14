@@ -6,6 +6,7 @@ import eventRoutes from './routes/eventRoutes.js'
 import availabilityRoutes from './routes/availabilityRoutes.js'
 import publicRoutes from './routes/publicRoutes.js'
 import bookingRoutes from './routes/bookingRoutes.js'
+import calendarRoutes from './routes/calendarRoutes.js'
 
 const app = express()
 
@@ -28,6 +29,7 @@ app.use('/api/events', eventRoutes)
 app.use('/api/availability', availabilityRoutes)
 app.use('/api/public', publicRoutes)
 app.use('/api/bookings', bookingRoutes)
+app.use('/api/calendar', calendarRoutes)
 
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500

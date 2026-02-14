@@ -13,19 +13,21 @@ enum BookingStatus {
 }
 
 model User {
-  id           String                 @id @default(uuid()) @db.Uuid
-  name         String
-  email        String                 @unique
-  username     String                 @unique
-  passwordHash String?                @map("password_hash")
-  googleId     String?                @unique @map("google_id")
-  timezone     String                 @default("UTC")
-  createdAt    DateTime               @default(now()) @map("created_at")
-  updatedAt    DateTime               @updatedAt @map("updated_at")
-  eventTypes   EventType[]
-  rules        AvailabilityRule[]
-  overrides    AvailabilityOverride[]
-  bookings     Booking[]
+  id                       String                    @id @default(uuid()) @db.Uuid
+  name                     String
+  email                    String                    @unique
+  username                 String                    @unique
+  passwordHash             String?                   @map("password_hash")
+  googleId                 String?                   @unique @map("google_id")
+  timezone                 String                    @default("UTC")
+  createdAt                DateTime                  @default(now()) @map("created_at")
+  updatedAt                DateTime                  @updatedAt @map("updated_at")
+  eventTypes               EventType[]
+  rules                    AvailabilityRule[]
+  overrides                AvailabilityOverride[]
+  bookings                 Booking[]
+  googleCalendarConnection GoogleCalendarConnection?
+  externalBusySlots        ExternalBusySlot[]
 
   @@map("users")
 }
@@ -125,4 +127,38 @@ model BookingAnswer {
 
   @@index([bookingId])
   @@map("booking_answers")
+}
+
+model GoogleCalendarConnection {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @unique @map("user_id") @db.Uuid
+  accessToken     String    @map("access_token")
+  refreshToken    String?   @map("refresh_token")
+  tokenExpiry     DateTime? @map("token_expiry")
+  calendarId      String    @default("primary") @map("calendar_id")
+  syncToken       String?   @map("sync_token")
+  watchChannelId  String?   @map("watch_channel_id")
+  watchResourceId String?   @map("watch_resource_id")
+  watchExpiration DateTime? @map("watch_expiration")
+  lastSyncedAt    DateTime? @map("last_synced_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("google_calendar_connections")
+}
+
+model ExternalBusySlot {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @map("user_id") @db.Uuid
+  calendarId    String   @map("calendar_id")
+  googleEventId String   @map("google_event_id")
+  startTime     DateTime @map("start_time") @db.Timestamptz(6)
+  endTime       DateTime @map("end_time") @db.Timestamptz(6)
+  createdAt     DateTime @default(now()) @map("created_at")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, calendarId, googleEventId])
+  @@index([userId, startTime, endTime])
+  @@map("external_busy_slots")
 }

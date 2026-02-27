@@ -153,3 +153,11 @@ export interface CreatedBookingResponse {
 export interface BookingsResponse {
   bookings: Booking[]
 }
+
+export interface CalendarStatusResponse {
+  connected: boolean
+  calendarId: string | null
+  lastSyncedAt: string | null
+  watchExpiration: string | null
+  busySlotsCount?: number
+}

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { AppLayout } from '../components/AppLayout'
 import { bookingService } from '../services/bookingService'
 import { publicService } from '../services/publicService'
 import { eventService } from '../services/eventService'
+import { calendarService } from '../services/calendarService'
 import { generateGoogleCalendarUrl } from '../utils/calendar'
-import type { Booking, EventType, TimeSlot } from '../types'
+import type { Booking, EventType, TimeSlot, CalendarStatusResponse } from '../types'
 import {
   Calendar,
   Clock,
@@ -19,6 +20,7 @@ import {
   UserCheck,
   CalendarSync,
   CalendarPlus,
+  RefreshCw,
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
@@ -28,11 +30,15 @@ import {
 
 export const Dashboard = () => {
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [bookingTab, setBookingTab] = useState<'upcoming' | 'past'>('upcoming')
   const [bookings, setBookings] = useState<Booking[]>([])
   const [events, setEvents] = useState<EventType[]>([])
+  const [calendarStatus, setCalendarStatus] = useState<CalendarStatusResponse | null>(null)
   const [loadingBookings, setLoadingBookings] = useState(true)
+  const [syncingCalendar, setSyncingCalendar] = useState(false)
+  const [disconnectingCalendar, setDisconnectingCalendar] = useState(false)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [confirmingCancelId, setConfirmingCancelId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -50,12 +56,14 @@ export const Dashboard = () => {
   const loadDashboardData = async () => {
     try {
       setLoadingBookings(true)
-      const [fetchedBookings, fetchedEvents] = await Promise.all([
+      const [fetchedBookings, fetchedEvents, fetchedCalStatus] = await Promise.all([
         bookingService.getBookings({ type: bookingTab }),
         eventService.getEvents(),
+        calendarService.getStatus().catch(() => null),
       ])
       setBookings(fetchedBookings)
       setEvents(fetchedEvents)
+      setCalendarStatus(fetchedCalStatus)
     } catch {
       setBookings([])
     } finally {
@@ -66,6 +74,67 @@ export const Dashboard = () => {
   useEffect(() => {
     loadDashboardData()
   }, [bookingTab])
+
+  useEffect(() => {
+    const calParam = searchParams.get('calendar')
+    const errorParam = searchParams.get('error')
+
+    if (calParam === 'connected') {
+      setActionSuccess('Google Calendar connected and initial sync completed successfully!')
+      searchParams.delete('calendar')
+      setSearchParams(searchParams, { replace: true })
+      calendarService.getStatus().then(setCalendarStatus).catch(() => {})
+    } else if (errorParam) {
+      setActionError(`Google Calendar connection error: ${errorParam}`)
+      searchParams.delete('error')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
+
+  const handleSyncCalendar = async () => {
+    try {
+      setSyncingCalendar(true)
+      setActionError(null)
+      setActionSuccess(null)
+      await calendarService.sync()
+      const status = await calendarService.getStatus()
+      setCalendarStatus(status)
+      setActionSuccess('Google Calendar synchronized successfully')
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setActionError(err.message)
+      } else {
+        setActionError('Failed to sync Google Calendar')
+      }
+    } finally {
+      setSyncingCalendar(false)
+    }
+  }
+
+  const handleDisconnectCalendar = async () => {
+    try {
+      setDisconnectingCalendar(true)
+      setActionError(null)
+      setActionSuccess(null)
+      await calendarService.disconnect()
+      setCalendarStatus({
+        connected: false,
+        calendarId: null,
+        lastSyncedAt: null,
+        watchExpiration: null,
+        busySlotsCount: 0,
+      })
+      setActionSuccess('Google Calendar disconnected successfully')
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setActionError(err.message)
+      } else {
+        setActionError('Failed to disconnect Google Calendar')
+      }
+    } finally {
+      setDisconnectingCalendar(false)
+    }
+  }
 
   useEffect(() => {
     if (!reschedulingBooking || !user?.username || !reschedulingBooking.eventType?.slug || !selectedDate) {
@@ -326,6 +395,72 @@ export const Dashboard = () => {
               <Clock className="w-5 h-5" />
             </div>
           </Link>
+        </div>
+
+        <div className="bg-white border border-neutral-200 rounded-lg p-5 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start space-x-3.5">
+              <div className="w-10 h-10 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-700 shrink-0 mt-0.5">
+                <CalendarSync className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2.5">
+                  <h2 className="text-sm font-semibold text-neutral-900">Google Calendar Availability Sync</h2>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${
+                      calendarStatus?.connected
+                        ? 'text-emerald-700 border border-emerald-200 bg-emerald-50'
+                        : 'text-neutral-600 border border-neutral-200 bg-neutral-50'
+                    }`}
+                  >
+                    {calendarStatus?.connected ? 'Connected' : 'Not Connected'}
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-500">
+                  {calendarStatus?.connected
+                    ? `Synced with ${calendarStatus.calendarId || 'primary'} calendar (${calendarStatus.busySlotsCount} busy slot${calendarStatus.busySlotsCount === 1 ? '' : 's'} cached)`
+                    : 'Connect your Google Calendar to automatically block conflicting busy slots from InTime booking.'}
+                </p>
+                {calendarStatus?.connected && calendarStatus.lastSyncedAt && (
+                  <p className="text-[11px] text-neutral-400">
+                    Last synced: {new Date(calendarStatus.lastSyncedAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2 shrink-0 sm:self-center">
+              {calendarStatus?.connected ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={syncingCalendar}
+                    onClick={handleSyncCalendar}
+                    className="h-8 px-3 rounded-md border border-neutral-200 hover:border-neutral-300 bg-white text-neutral-700 text-xs font-medium flex items-center space-x-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${syncingCalendar ? 'animate-spin' : ''}`} />
+                    <span>{syncingCalendar ? 'Syncing...' : 'Sync Now'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={disconnectingCalendar}
+                    onClick={handleDisconnectCalendar}
+                    className="h-8 px-3 rounded-md border border-red-200 hover:bg-red-50 text-red-600 text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    {disconnectingCalendar ? 'Disconnecting...' : 'Disconnect'}
+                  </button>
+                </>
+              ) : (
+                <a
+                  href="/api/calendar/google/connect"
+                  className="h-8 px-3.5 rounded-md bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-medium inline-flex items-center space-x-1.5 transition-colors cursor-pointer shadow-xs"
+                >
+                  <CalendarPlus className="w-3.5 h-3.5" />
+                  <span>Connect Google Calendar</span>
+                </a>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="space-y-4">

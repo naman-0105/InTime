@@ -213,3 +213,238 @@ export const parseEventToBusySlot = (event) => {
     endTime: endUtc,
   }
 }
+
+export const performInitialCalendarSync = async (userId) => {
+  const { accessToken, calendarId } = await getValidAccessToken(userId)
+
+  const now = new Date()
+  const timeMin = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  const timeMax = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
+
+  const { items, nextSyncToken } = await fetchCalendarEvents({
+    accessToken,
+    calendarId,
+    timeMin,
+    timeMax,
+  })
+
+  const busySlotsMap = new Map()
+
+  for (const item of items) {
+    const parsed = parseEventToBusySlot(item)
+    if (!parsed) continue
+
+    if (parsed.isCancelled) {
+      busySlotsMap.delete(parsed.googleEventId)
+    } else {
+      busySlotsMap.set(parsed.googleEventId, {
+        userId,
+        calendarId,
+        googleEventId: parsed.googleEventId,
+        startTime: parsed.startTime,
+        endTime: parsed.endTime,
+      })
+    }
+  }
+
+  const busySlotsToCreate = Array.from(busySlotsMap.values())
+
+  await prisma.$transaction([
+    prisma.externalBusySlot.deleteMany({
+      where: { userId, calendarId },
+    }),
+    prisma.externalBusySlot.createMany({
+      data: busySlotsToCreate,
+    }),
+    prisma.googleCalendarConnection.update({
+      where: { userId },
+      data: {
+        syncToken: nextSyncToken || null,
+        lastSyncedAt: new Date(),
+      },
+    }),
+  ])
+
+  return {
+    count: busySlotsToCreate.length,
+    syncToken: nextSyncToken,
+  }
+}
+
+export const syncUserCalendar = async (userId) => {
+  const connection = await prisma.googleCalendarConnection.findUnique({
+    where: { userId },
+  })
+
+  if (!connection) {
+    const err = new Error('Google Calendar is not connected')
+    err.statusCode = 404
+    throw err
+  }
+
+  if (!connection.syncToken) {
+    return await performInitialCalendarSync(userId)
+  }
+
+  try {
+    const { accessToken, calendarId } = await getValidAccessToken(userId)
+
+    const { items, nextSyncToken } = await fetchCalendarEvents({
+      accessToken,
+      calendarId,
+      syncToken: connection.syncToken,
+    })
+
+    for (const item of items) {
+      const parsed = parseEventToBusySlot(item)
+      if (!parsed) continue
+
+      if (parsed.isCancelled) {
+        await prisma.externalBusySlot.deleteMany({
+          where: {
+            userId,
+            calendarId,
+            googleEventId: parsed.googleEventId,
+          },
+        })
+      } else {
+        await prisma.externalBusySlot.upsert({
+          where: {
+            userId_calendarId_googleEventId: {
+              userId,
+              calendarId,
+              googleEventId: parsed.googleEventId,
+            },
+          },
+          update: {
+            startTime: parsed.startTime,
+            endTime: parsed.endTime,
+          },
+          create: {
+            userId,
+            calendarId,
+            googleEventId: parsed.googleEventId,
+            startTime: parsed.startTime,
+            endTime: parsed.endTime,
+          },
+        })
+      }
+    }
+
+    await prisma.googleCalendarConnection.update({
+      where: { userId },
+      data: {
+        syncToken: nextSyncToken || connection.syncToken,
+        lastSyncedAt: new Date(),
+      },
+    })
+
+    return {
+      synced: true,
+      itemsCount: items.length,
+      syncToken: nextSyncToken,
+    }
+  } catch (err) {
+    if (err.syncTokenInvalid || err.statusCode === 410) {
+      return await performInitialCalendarSync(userId)
+    }
+    throw err
+  }
+}
+
+export const registerCalendarWatch = async (userId) => {
+  const webhookUrl = process.env.GOOGLE_CALENDAR_WEBHOOK_URL
+  if (!webhookUrl) {
+    return { registered: false, reason: 'GOOGLE_CALENDAR_WEBHOOK_URL not configured' }
+  }
+
+  const { accessToken, calendarId, connection } = await getValidAccessToken(userId)
+
+  if (connection.watchChannelId && connection.watchResourceId) {
+    await stopCalendarWatch(userId).catch(() => {})
+  }
+
+  const channelId = `intime-watch-${userId}-${Date.now()}`
+
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/watch`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: channelId,
+        type: 'web_hook',
+        address: webhookUrl,
+        token: `userId=${userId}`,
+      }),
+    }
+  )
+
+  const data = await res.json()
+
+  if (!res.ok) {
+    const err = new Error(data.error?.message || 'Failed to register Google Calendar watch channel')
+    err.statusCode = res.status
+    throw err
+  }
+
+  const expirationDate = data.expiration ? new Date(Number(data.expiration)) : null
+
+  await prisma.googleCalendarConnection.update({
+    where: { userId },
+    data: {
+      watchChannelId: data.id,
+      watchResourceId: data.resourceId,
+      watchExpiration: expirationDate,
+    },
+  })
+
+  return {
+    registered: true,
+    channelId: data.id,
+    resourceId: data.resourceId,
+    expiration: expirationDate,
+  }
+}
+
+export const stopCalendarWatch = async (userId) => {
+  const connection = await prisma.googleCalendarConnection.findUnique({
+    where: { userId },
+  })
+
+  if (!connection || !connection.watchChannelId || !connection.watchResourceId) {
+    return { stopped: true }
+  }
+
+  try {
+    const { accessToken } = await getValidAccessToken(userId)
+
+    await fetch('https://www.googleapis.com/calendar/v3/channels/stop', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: connection.watchChannelId,
+        resourceId: connection.watchResourceId,
+      }),
+    })
+  } catch {
+  }
+
+  await prisma.googleCalendarConnection.update({
+    where: { userId },
+    data: {
+      watchChannelId: null,
+      watchResourceId: null,
+      watchExpiration: null,
+    },
+  })
+
+  return { stopped: true }
+}
+

@@ -1,5 +1,11 @@
 import jwt from 'jsonwebtoken'
 import prisma from '../db/prisma.js'
+import {
+  performInitialCalendarSync,
+  syncUserCalendar,
+  registerCalendarWatch,
+  stopCalendarWatch,
+} from '../services/googleCalendarService.js'
 
 export const initiateGoogleCalendarAuth = (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID
@@ -99,6 +105,9 @@ export const handleGoogleCalendarCallback = async (req, res) => {
       },
     })
 
+    performInitialCalendarSync(decoded.userId).catch(() => {})
+    registerCalendarWatch(decoded.userId).catch(() => {})
+
     return res.redirect(`${clientUrl}/dashboard?calendar=connected`)
   } catch {
     return res.redirect(`${clientUrl}/dashboard?error=google_calendar_server_error`)
@@ -118,11 +127,30 @@ export const getGoogleCalendarStatus = async (req, res, next) => {
       },
     })
 
+    const busySlotsCount = connection
+      ? await prisma.externalBusySlot.count({
+          where: { userId: req.user.id },
+        })
+      : 0
+
     return res.status(200).json({
       connected: Boolean(connection),
       calendarId: connection?.calendarId || null,
       lastSyncedAt: connection?.lastSyncedAt || null,
       watchExpiration: connection?.watchExpiration || null,
+      busySlotsCount,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const syncGoogleCalendar = async (req, res, next) => {
+  try {
+    const result = await syncUserCalendar(req.user.id)
+    return res.status(200).json({
+      message: 'Google Calendar synchronized successfully',
+      result,
     })
   } catch (error) {
     next(error)
@@ -131,6 +159,8 @@ export const getGoogleCalendarStatus = async (req, res, next) => {
 
 export const disconnectGoogleCalendar = async (req, res, next) => {
   try {
+    await stopCalendarWatch(req.user.id).catch(() => {})
+
     await prisma.$transaction([
       prisma.googleCalendarConnection.deleteMany({
         where: { userId: req.user.id },
@@ -147,3 +177,46 @@ export const disconnectGoogleCalendar = async (req, res, next) => {
     next(error)
   }
 }
+
+export const handleGoogleCalendarWebhook = async (req, res) => {
+  const channelId = req.headers['x-goog-channel-id']
+  const resourceState = req.headers['x-goog-resource-state']
+  const channelToken = req.headers['x-goog-channel-token']
+
+  res.status(200).send('OK')
+
+  if (resourceState === 'sync' || !channelId) {
+    return
+  }
+
+  try {
+    let connection = await prisma.googleCalendarConnection.findFirst({
+      where: { watchChannelId: channelId },
+    })
+
+    if (!connection && channelToken && channelToken.startsWith('userId=')) {
+      const tokenUserId = channelToken.split('=')[1]
+      connection = await prisma.googleCalendarConnection.findUnique({
+        where: { userId: tokenUserId },
+      })
+    }
+
+    if (connection) {
+      await syncUserCalendar(connection.userId)
+    }
+  } catch {
+  }
+}
+
+export const renewGoogleCalendarWatch = async (req, res, next) => {
+  try {
+    const result = await registerCalendarWatch(req.user.id)
+    return res.status(200).json({
+      message: 'Watch registration updated',
+      result,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+

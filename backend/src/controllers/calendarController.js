@@ -6,6 +6,7 @@ import {
   registerCalendarWatch,
   stopCalendarWatch,
 } from '../services/googleCalendarService.js'
+import { enqueueCalendarSync } from '../queues/calendarSyncQueue.js'
 
 export const initiateGoogleCalendarAuth = (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID
@@ -202,7 +203,7 @@ export const handleGoogleCalendarWebhook = async (req, res) => {
     }
 
     if (connection) {
-      await syncUserCalendar(connection.userId)
+      await enqueueCalendarSync(connection.userId)
     }
   } catch {
   }

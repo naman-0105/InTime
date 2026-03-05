@@ -131,22 +131,31 @@ export const generateAvailableSlots = async ({
   const searchStartUtc = new Date(dayStartUtc.getTime() - 24 * 60 * 60 * 1000)
   const searchEndUtc = new Date(dayEndUtc.getTime() + 24 * 60 * 60 * 1000)
 
-  const confirmedBookings = await prisma.booking.findMany({
-    where: {
-      hostId,
-      status: 'CONFIRMED',
-      startTime: { lt: searchEndUtc },
-      endTime: { gt: searchStartUtc },
-    },
-    include: {
-      eventType: {
-        select: {
-          bufferBeforeMin: true,
-          bufferAfterMin: true,
+  const [confirmedBookings, externalBusySlots] = await Promise.all([
+    prisma.booking.findMany({
+      where: {
+        hostId,
+        status: 'CONFIRMED',
+        startTime: { lt: searchEndUtc },
+        endTime: { gt: searchStartUtc },
+      },
+      include: {
+        eventType: {
+          select: {
+            bufferBeforeMin: true,
+            bufferAfterMin: true,
+          },
         },
       },
-    },
-  })
+    }),
+    prisma.externalBusySlot.findMany({
+      where: {
+        userId: hostId,
+        startTime: { lt: searchEndUtc },
+        endTime: { gt: searchStartUtc },
+      },
+    }),
+  ])
 
   const minNoticeLimit = new Date(now.getTime() + minNoticeMin * 60 * 1000)
 
@@ -158,7 +167,7 @@ export const generateAvailableSlots = async ({
     const slotEffStart = new Date(slot.startTime.getTime() - bufferBeforeMin * 60 * 1000)
     const slotEffEnd = new Date(slot.endTime.getTime() + bufferAfterMin * 60 * 1000)
 
-    const hasConflict = confirmedBookings.some((booking) => {
+    const hasBookingConflict = confirmedBookings.some((booking) => {
       const bBufferBefore = (booking.eventType?.bufferBeforeMin || 0) * 60 * 1000
       const bBufferAfter = (booking.eventType?.bufferAfterMin || 0) * 60 * 1000
       const bEffStart = new Date(booking.startTime.getTime() - bBufferBefore)
@@ -167,7 +176,15 @@ export const generateAvailableSlots = async ({
       return slotEffStart < bEffEnd && slotEffEnd > bEffStart
     })
 
-    return !hasConflict
+    if (hasBookingConflict) {
+      return false
+    }
+
+    const hasExternalConflict = externalBusySlots.some((busySlot) => {
+      return slotEffStart < busySlot.endTime && slotEffEnd > busySlot.startTime
+    })
+
+    return !hasExternalConflict
   })
 
   return availableSlots

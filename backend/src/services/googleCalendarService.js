@@ -112,6 +112,28 @@ export const queryFreeBusy = async ({
   }))
 }
 
+export const validateGoogleAvailability = async (userId, startTime, endTime) => {
+  try {
+    const { accessToken, calendarId } = await getValidAccessToken(userId)
+    const busySlots = await queryFreeBusy({
+      accessToken,
+      timeMin: startTime,
+      timeMax: endTime,
+      calendarId,
+    })
+
+    const start = new Date(startTime)
+    const end = new Date(endTime)
+
+    const hasConflict = busySlots.some((slot) => start < slot.end && end > slot.start)
+
+    return !hasConflict
+  } catch {
+    return true
+  }
+}
+
+
 export const fetchCalendarEvents = async ({
   accessToken,
   calendarId = 'primary',

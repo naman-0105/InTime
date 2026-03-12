@@ -470,3 +470,61 @@ export const stopCalendarWatch = async (userId) => {
   return { stopped: true }
 }
 
+export const renewExpiringGoogleCalendarWatches = async () => {
+  const now = new Date()
+  const renewalThreshold = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+
+  const expiringConnections = await prisma.googleCalendarConnection.findMany({
+    where: {
+      watchExpiration: {
+        not: null,
+        lte: renewalThreshold,
+      },
+    },
+    select: {
+      id: true,
+      userId: true,
+      watchChannelId: true,
+      watchExpiration: true,
+    },
+  })
+
+  const results = []
+
+  for (const connection of expiringConnections) {
+    try {
+      const renewalResult = await registerCalendarWatch(connection.userId)
+      results.push({ userId: connection.userId, success: true, result: renewalResult })
+    } catch (error) {
+      console.error(`Failed to renew watch for user ${connection.userId}:`, error?.message)
+      results.push({ userId: connection.userId, success: false, error: error?.message })
+    }
+  }
+
+  return results
+}
+
+let renewalIntervalTimer = null
+
+export const startWatchRenewalInterval = (intervalMs = 4 * 60 * 60 * 1000) => {
+  if (renewalIntervalTimer) {
+    return renewalIntervalTimer
+  }
+
+  renewalIntervalTimer = setInterval(() => {
+    renewExpiringGoogleCalendarWatches().catch((err) => {
+      console.error('Error running renewExpiringGoogleCalendarWatches:', err?.message)
+    })
+  }, intervalMs)
+
+  return renewalIntervalTimer
+}
+
+export const stopWatchRenewalInterval = () => {
+  if (renewalIntervalTimer) {
+    clearInterval(renewalIntervalTimer)
+    renewalIntervalTimer = null
+  }
+}
+
+

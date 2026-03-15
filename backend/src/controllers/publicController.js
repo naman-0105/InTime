@@ -2,11 +2,7 @@ import crypto from 'crypto'
 import prisma from '../db/prisma.js'
 import { generateAvailableSlots } from '../services/slotService.js'
 import { isValidEmail } from '../utils/validation.js'
-import {
-  sendBookingConfirmationEmails,
-  sendBookingRescheduledEmails,
-  sendBookingCancellationEmails,
-} from '../services/emailService.js'
+import { enqueueEmail } from '../queues/emailQueue.js'
 import { validateGoogleAvailability } from '../services/googleCalendarService.js'
 
 export const getPublicEvent = async (req, res, next) => {
@@ -396,10 +392,9 @@ export const createBooking = async (req, res, next) => {
         }
       )
 
-      sendBookingConfirmationEmails({
-        booking,
-        host,
-        eventType: event,
+      await enqueueEmail({
+        type: 'booking-confirmation',
+        bookingId: booking.id,
       })
 
       return res.status(201).json({ booking })
@@ -610,10 +605,9 @@ export const rescheduleBookingByToken = async (req, res, next) => {
         }
       )
 
-      sendBookingRescheduledEmails({
-        booking: updatedBooking,
-        host: updatedBooking.host,
-        eventType: updatedBooking.eventType,
+      await enqueueEmail({
+        type: 'booking-rescheduled',
+        bookingId: updatedBooking.id,
         previousStartTime,
         previousEndTime,
       })
@@ -741,10 +735,9 @@ export const cancelBookingByToken = async (req, res, next) => {
       },
     })
 
-    sendBookingCancellationEmails({
-      booking: updatedBooking,
-      host: updatedBooking.host,
-      eventType: updatedBooking.eventType,
+    await enqueueEmail({
+      type: 'booking-cancellation',
+      bookingId: updatedBooking.id,
     })
 
     return res.status(200).json({

@@ -1,8 +1,5 @@
 import prisma from '../db/prisma.js'
-import {
-  sendBookingCancellationEmails,
-  sendBookingRescheduledEmails,
-} from '../services/emailService.js'
+import { enqueueEmail } from '../queues/emailQueue.js'
 import { validateGoogleAvailability } from '../services/googleCalendarService.js'
 
 export const getBookings = async (req, res, next) => {
@@ -164,10 +161,9 @@ export const cancelBooking = async (req, res, next) => {
       },
     })
 
-    sendBookingCancellationEmails({
-      booking: updatedBooking,
-      host: updatedBooking.host,
-      eventType: updatedBooking.eventType,
+    await enqueueEmail({
+      type: 'booking-cancellation',
+      bookingId: updatedBooking.id,
     })
 
     return res.status(200).json({
@@ -372,10 +368,9 @@ export const rescheduleBooking = async (req, res, next) => {
         }
       )
 
-      sendBookingRescheduledEmails({
-        booking: updatedBooking,
-        host: updatedBooking.host,
-        eventType: updatedBooking.eventType,
+      await enqueueEmail({
+        type: 'booking-rescheduled',
+        bookingId: updatedBooking.id,
         previousStartTime,
         previousEndTime,
       })

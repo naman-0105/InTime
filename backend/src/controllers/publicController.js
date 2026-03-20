@@ -41,6 +41,7 @@ export const getPublicEvent = async (req, res, next) => {
         description: true,
         durationMin: true,
         maxNoticeDays: true,
+        location: true,
         isActive: true,
         customQuestions: {
           select: {
@@ -369,6 +370,7 @@ export const createBooking = async (req, res, next) => {
                 select: {
                   name: true,
                   durationMin: true,
+                  location: true,
                 },
               },
               host: {
@@ -581,6 +583,7 @@ export const rescheduleBookingByToken = async (req, res, next) => {
                   slug: true,
                   durationMin: true,
                   description: true,
+                  location: true,
                 },
               },
               host: {
@@ -654,6 +657,7 @@ export const getBookingByToken = async (req, res, next) => {
             durationMin: true,
             description: true,
             maxNoticeDays: true,
+            location: true,
           },
         },
         host: {
@@ -722,6 +726,7 @@ export const cancelBookingByToken = async (req, res, next) => {
             name: true,
             durationMin: true,
             description: true,
+            location: true,
           },
         },
         host: {

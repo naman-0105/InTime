@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { eventService } from '../services/eventService'
 import type { EventType } from '../types'
-import { Plus, Clock, Copy, Check, Edit2, Trash2, ExternalLink } from 'lucide-react'
+import { Plus, Clock, Copy, Check, Edit2, Trash2, ExternalLink, MapPin } from 'lucide-react'
 
 export const EventsList = () => {
   const { user } = useAuth()
@@ -122,9 +122,17 @@ export const EventsList = () => {
                   </span>
                 </div>
 
-                <div className="flex items-center space-x-1.5 text-xs text-neutral-500 mb-3">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>{event.durationMin} mins</span>
+                <div className="flex items-center space-x-3 text-xs text-neutral-500 mb-3">
+                  <div className="flex items-center space-x-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{event.durationMin} mins</span>
+                  </div>
+                  {event.location && (
+                    <div className="flex items-center space-x-1 truncate max-w-[140px]" title={event.location}>
+                      <MapPin className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{event.location}</span>
+                    </div>
+                  )}
                 </div>
 
                 {event.description && (

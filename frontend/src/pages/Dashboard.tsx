@@ -15,6 +15,7 @@ import {
   User,
   Mail,
   Globe,
+  MapPin,
   AtSign,
   ArrowRight,
   UserCheck,
@@ -594,6 +595,15 @@ export const Dashboard = () => {
                           <Mail className="w-3.5 h-3.5 text-neutral-400" />
                           <span>{b.guestEmail}</span>
                         </div>
+                        {b.eventType?.location && (
+                          <>
+                            <span>•</span>
+                            <div className="flex items-center space-x-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-neutral-400" />
+                              <span>{b.eventType.location}</span>
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       {b.answers && b.answers.length > 0 && (
@@ -621,7 +631,7 @@ export const Dashboard = () => {
                             guestEmail: b.guestEmail,
                             hostName: user.name,
                             hostEmail: user.email,
-                            location: 'InTime Meeting',
+                            location: b.eventType?.location || undefined,
                             answers: b.answers,
                           })}
                           target="_blank"

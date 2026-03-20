@@ -10,6 +10,7 @@ export const EventEdit = () => {
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [description, setDescription] = useState('')
+  const [location, setLocation] = useState('')
   const [durationMin, setDurationMin] = useState(30)
   const [isActive, setIsActive] = useState(true)
   const [minNoticeMin, setMinNoticeMin] = useState(0)
@@ -32,6 +33,7 @@ export const EventEdit = () => {
         setName(event.name)
         setSlug(event.slug)
         setDescription(event.description || '')
+        setLocation(event.location || '')
         setDurationMin(event.durationMin)
         setIsActive(event.isActive)
         setMinNoticeMin(event.minNoticeMin ?? 0)
@@ -107,6 +109,7 @@ export const EventEdit = () => {
         name,
         slug,
         description: description || undefined,
+        location: location ? location.trim() : null,
         durationMin,
         isActive,
         minNoticeMin,
@@ -262,6 +265,22 @@ export const EventEdit = () => {
                 placeholder="Brief summary of what this meeting is about..."
                 className="w-full p-3 bg-white border border-neutral-300 rounded-md text-sm text-neutral-900 focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-colors"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-neutral-700 mb-1.5">
+                Location / Meeting Link (Optional)
+              </label>
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="e.g. Google Meet, Zoom link, Phone call, Office room, or leave blank"
+                className="w-full px-3 h-10 bg-white border border-neutral-300 rounded-md text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-colors"
+              />
+              <p className="text-[11px] text-neutral-400 mt-1">
+                Optional location, meeting URL, or instructions for the attendee.
+              </p>
             </div>
           </div>
 

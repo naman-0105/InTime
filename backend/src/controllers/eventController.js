@@ -63,6 +63,7 @@ export const createEvent = async (req, res, next) => {
       maxNoticeDays,
       bufferBeforeMin,
       bufferAfterMin,
+      location,
       customQuestions,
     } = req.body
 
@@ -125,6 +126,7 @@ export const createEvent = async (req, res, next) => {
         maxNoticeDays: parsedMaxNotice,
         bufferBeforeMin: parsedBufferBefore,
         bufferAfterMin: parsedBufferAfter,
+        location: location ? location.trim() : null,
         customQuestions: {
           create: formattedQuestions,
         },
@@ -155,6 +157,7 @@ export const updateEvent = async (req, res, next) => {
       maxNoticeDays,
       bufferBeforeMin,
       bufferAfterMin,
+      location,
       customQuestions,
     } = req.body
 
@@ -254,6 +257,12 @@ export const updateEvent = async (req, res, next) => {
         maxNoticeDays: parsedMaxNotice,
         bufferBeforeMin: parsedBufferBefore,
         bufferAfterMin: parsedBufferAfter,
+        location:
+          location !== undefined
+            ? location
+              ? location.trim()
+              : null
+            : existingEvent.location,
       },
       include: {
         customQuestions: {

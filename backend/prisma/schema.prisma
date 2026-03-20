@@ -44,6 +44,7 @@ model EventType {
   maxNoticeDays   Int               @default(60) @map("max_notice_days")
   bufferBeforeMin Int               @default(0) @map("buffer_before_min")
   bufferAfterMin  Int               @default(0) @map("buffer_after_min")
+  location        String?
   createdAt       DateTime          @default(now()) @map("created_at")
   updatedAt       DateTime          @updatedAt @map("updated_at")
   user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)

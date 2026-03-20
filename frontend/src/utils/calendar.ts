@@ -7,7 +7,7 @@ interface GoogleCalendarUrlParams {
   guestEmail: string
   hostName: string
   hostEmail?: string
-  location?: string
+  location?: string | null
   manageUrl?: string
   answers?: Array<{ label: string; value: string }>
 }
@@ -21,7 +21,7 @@ export const generateGoogleCalendarUrl = ({
   guestEmail,
   hostName,
   hostEmail,
-  location = 'InTime Meeting',
+  location,
   manageUrl,
   answers = [],
 }: GoogleCalendarUrlParams): string => {

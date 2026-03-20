@@ -33,6 +33,7 @@ export interface EventType {
   slug: string
   description: string | null
   durationMin: number
+  location?: string | null
   isActive: boolean
   minNoticeMin: number
   maxNoticeDays: number
@@ -94,6 +95,7 @@ export interface PublicEvent {
   slug: string
   description: string | null
   durationMin: number
+  location?: string | null
   maxNoticeDays?: number
   customQuestions?: BookingQuestion[]
 }
@@ -132,6 +134,7 @@ export interface Booking {
     slug?: string
     durationMin: number
     description?: string | null
+    location?: string | null
   }
   host?: {
     name: string

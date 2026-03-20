@@ -73,7 +73,7 @@ export const generateGoogleCalendarUrl = ({
   guestEmail,
   hostName,
   hostEmail,
-  location = 'InTime Meeting',
+  location,
   manageUrl,
   answers = [],
 }) => {
@@ -134,7 +134,7 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
       guestEmail: booking.guestEmail,
       hostName: host.name,
       hostEmail: host.email,
-      location: 'InTime Meeting',
+      location: eventType.location || undefined,
       manageUrl: `${clientUrl}/booked/${booking.token}`,
       answers: booking.answers,
     })
@@ -154,6 +154,10 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
       `
     }
 
+    const locationHtml = eventType.location
+      ? `<p style="margin: 0 0 8px 0;"><strong>Location:</strong> ${eventType.location}</p>`
+      : ''
+
     const guestSubject = `Confirmed: ${eventType.name} with ${host.name}`
     const guestHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; color: #1f2937;">
@@ -163,6 +167,7 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
           <p style="margin: 0 0 8px 0;"><strong>Event:</strong> ${eventType.name}</p>
           <p style="margin: 0 0 8px 0;"><strong>Date:</strong> ${dateStr}</p>
           <p style="margin: 0 0 8px 0;"><strong>Time:</strong> ${timeStr}</p>
+          ${locationHtml}
           <p style="margin: 0 0 8px 0;"><strong>Host:</strong> ${host.name} (${host.email})</p>
           <p style="margin: 0;"><strong>Guest:</strong> ${booking.guestName} (${booking.guestEmail})</p>
           ${answersHtml}
@@ -185,6 +190,7 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
           <p style="margin: 0 0 8px 0;"><strong>Event:</strong> ${eventType.name}</p>
           <p style="margin: 0 0 8px 0;"><strong>Date:</strong> ${dateStr}</p>
           <p style="margin: 0 0 8px 0;"><strong>Time:</strong> ${timeStr}</p>
+          ${locationHtml}
           <p style="margin: 0;"><strong>Guest Details:</strong> ${booking.guestName} (${booking.guestEmail})</p>
           ${answersHtml}
         </div>
@@ -243,10 +249,14 @@ export const sendBookingRescheduledEmails = async ({
       guestEmail: booking.guestEmail,
       hostName: host.name,
       hostEmail: host.email,
-      location: 'InTime Meeting',
+      location: eventType.location || undefined,
       manageUrl: `${clientUrl}/booked/${booking.token}`,
       answers: booking.answers,
     })
+
+    const locationHtml = eventType.location
+      ? `<p style="margin: 0 0 8px 0;"><strong>Location:</strong> ${eventType.location}</p>`
+      : ''
 
     const guestSubject = `Rescheduled: ${eventType.name} with ${host.name}`
     const guestHtml = `
@@ -257,6 +267,7 @@ export const sendBookingRescheduledEmails = async ({
           <p style="margin: 0 0 8px 0;"><strong>Event:</strong> ${eventType.name}</p>
           <p style="margin: 0 0 8px 0;"><strong>New Date:</strong> ${newDateStr}</p>
           <p style="margin: 0 0 8px 0;"><strong>New Time:</strong> ${newTimeStr}</p>
+          ${locationHtml}
           <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px;"><strong>Previous Time:</strong> ${prevDateStr} at ${prevTimeStr}</p>
           <p style="margin: 0 0 8px 0;"><strong>Host:</strong> ${host.name} (${host.email})</p>
           <p style="margin: 0;"><strong>Guest:</strong> ${booking.guestName} (${booking.guestEmail})</p>
@@ -279,6 +290,7 @@ export const sendBookingRescheduledEmails = async ({
           <p style="margin: 0 0 8px 0;"><strong>Event:</strong> ${eventType.name}</p>
           <p style="margin: 0 0 8px 0;"><strong>New Date:</strong> ${newDateStr}</p>
           <p style="margin: 0 0 8px 0;"><strong>New Time:</strong> ${newTimeStr}</p>
+          ${locationHtml}
           <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px;"><strong>Previous Time:</strong> ${prevDateStr} at ${prevTimeStr}</p>
           <p style="margin: 0;"><strong>Guest Details:</strong> ${booking.guestName} (${booking.guestEmail})</p>
         </div>
@@ -317,6 +329,10 @@ export const sendBookingCancellationEmails = async ({ booking, host, eventType }
       host.timezone || 'UTC'
     )
 
+    const locationHtml = eventType.location
+      ? `<p style="margin: 0 0 8px 0;"><strong>Location:</strong> ${eventType.location}</p>`
+      : ''
+
     const guestSubject = `Cancelled: ${eventType.name} with ${host.name}`
     const guestHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; color: #1f2937;">
@@ -326,6 +342,7 @@ export const sendBookingCancellationEmails = async ({ booking, host, eventType }
           <p style="margin: 0 0 8px 0;"><strong>Event:</strong> ${eventType.name}</p>
           <p style="margin: 0 0 8px 0;"><strong>Date:</strong> ${dateStr}</p>
           <p style="margin: 0 0 8px 0;"><strong>Time:</strong> ${timeStr}</p>
+          ${locationHtml}
           <p style="margin: 0;"><strong>Host:</strong> ${host.name}</p>
         </div>
         <p style="font-size: 14px; color: #6b7280;">If you wish to reschedule, visit <a href="${clientUrl}" style="color: #2563eb; text-decoration: underline;">InTime</a>.</p>
@@ -341,6 +358,7 @@ export const sendBookingCancellationEmails = async ({ booking, host, eventType }
           <p style="margin: 0 0 8px 0;"><strong>Event:</strong> ${eventType.name}</p>
           <p style="margin: 0 0 8px 0;"><strong>Date:</strong> ${dateStr}</p>
           <p style="margin: 0 0 8px 0;"><strong>Time:</strong> ${timeStr}</p>
+          ${locationHtml}
           <p style="margin: 0;"><strong>Guest:</strong> ${booking.guestName} (${booking.guestEmail})</p>
         </div>
         <p style="font-size: 14px; color: #6b7280;">View all bookings on your <a href="${clientUrl}/dashboard" style="color: #2563eb; text-decoration: underline;">Dashboard</a>.</p>

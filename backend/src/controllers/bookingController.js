@@ -38,6 +38,7 @@ export const getBookings = async (req, res, next) => {
             name: true,
             slug: true,
             durationMin: true,
+            location: true,
           },
         },
         answers: {
@@ -83,6 +84,7 @@ export const getBookingById = async (req, res, next) => {
             slug: true,
             durationMin: true,
             description: true,
+            location: true,
           },
         },
         answers: {
@@ -141,6 +143,7 @@ export const cancelBooking = async (req, res, next) => {
             name: true,
             durationMin: true,
             description: true,
+            location: true,
           },
         },
         host: {
@@ -343,6 +346,7 @@ export const rescheduleBooking = async (req, res, next) => {
                   slug: true,
                   durationMin: true,
                   description: true,
+                  location: true,
                 },
               },
               host: {

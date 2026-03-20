@@ -7,6 +7,7 @@ import {
   Calendar as CalendarIcon,
   Clock,
   Globe,
+  MapPin,
   ChevronLeft,
   ChevronRight,
   User,
@@ -281,6 +282,13 @@ export const PublicBooking = () => {
                 <Globe className="w-4 h-4 text-neutral-400" />
                 <span>{host.timezone}</span>
               </div>
+
+              {event.location && (
+                <div className="flex items-center space-x-2 text-xs text-neutral-600 font-medium">
+                  <MapPin className="w-4 h-4 text-neutral-400" />
+                  <span>{event.location}</span>
+                </div>
+              )}
 
               {selectedDate && selectedSlot && (
                 <div className="flex items-center space-x-2 text-xs text-neutral-900 font-semibold pt-2">

@@ -10,6 +10,7 @@ import {
   CalendarPlus,
   Clock,
   Globe,
+  MapPin,
   User,
   Mail,
   ArrowLeft,
@@ -355,6 +356,13 @@ export const BookedConfirmation = () => {
                     <span className="text-neutral-500">Time zone: {booking.host.timezone}</span>
                   </div>
                 )}
+
+                {booking.eventType?.location && (
+                  <div className="flex items-center space-x-2.5">
+                    <MapPin className="w-4 h-4 text-neutral-400 shrink-0" />
+                    <span className="text-neutral-700 font-medium">{booking.eventType.location}</span>
+                  </div>
+                )}
               </div>
 
               <div className="p-4 space-y-2 text-xs text-neutral-600">
@@ -393,7 +401,7 @@ export const BookedConfirmation = () => {
                     guestEmail: booking.guestEmail,
                     hostName: booking.host?.name || 'Host',
                     hostEmail: booking.host?.email,
-                    location: 'InTime Meeting',
+                    location: booking.eventType?.location || undefined,
                     manageUrl: token ? `${window.location.origin}/booked/${token}` : undefined,
                     answers: booking.answers,
                   })}

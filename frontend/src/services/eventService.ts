@@ -35,6 +35,7 @@ export const eventService = {
     maxNoticeDays?: number
     bufferBeforeMin?: number
     bufferAfterMin?: number
+    location?: string | null
     customQuestions?: BookingQuestion[]
   }): Promise<EventType> {
     const res = await fetch(API_BASE, {
@@ -62,6 +63,7 @@ export const eventService = {
       maxNoticeDays?: number
       bufferBeforeMin?: number
       bufferAfterMin?: number
+      location?: string | null
       customQuestions?: BookingQuestion[]
     }
   ): Promise<EventType> {

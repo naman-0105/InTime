@@ -106,7 +106,12 @@ export const handleGoogleCalendarCallback = async (req, res) => {
       },
     })
 
-    performInitialCalendarSync(decoded.userId).catch(() => {})
+    try {
+      await performInitialCalendarSync(decoded.userId)
+    } catch (syncErr) {
+      console.error('Initial Google Calendar sync failed:', syncErr?.message)
+    }
+
     registerCalendarWatch(decoded.userId).catch(() => {})
 
     return res.redirect(`${clientUrl}/dashboard?calendar=connected`)

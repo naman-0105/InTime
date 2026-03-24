@@ -1,4 +1,5 @@
 import prisma from '../db/prisma.js'
+import { localToUTC } from './slotService.js'
 
 export const getValidAccessToken = async (userId) => {
   const connection = await prisma.googleCalendarConnection.findUnique({
@@ -146,13 +147,12 @@ export const fetchCalendarEvents = async ({
   let nextSyncToken = null
 
   do {
-    const params = new URLSearchParams({
-      singleEvents: 'true',
-    })
+    const params = new URLSearchParams()
 
     if (syncToken) {
       params.set('syncToken', syncToken)
     } else {
+      params.set('singleEvents', 'true')
       if (timeMin) params.set('timeMin', new Date(timeMin).toISOString())
       if (timeMax) params.set('timeMax', new Date(timeMax).toISOString())
       params.set('maxResults', '2500')
@@ -201,7 +201,7 @@ export const fetchCalendarEvents = async ({
   }
 }
 
-export const parseEventToBusySlot = (event) => {
+export const parseEventToBusySlot = (event, timezone = 'UTC') => {
   if (!event || !event.id) {
     return null
   }
@@ -220,8 +220,8 @@ export const parseEventToBusySlot = (event) => {
     startUtc = new Date(event.start.dateTime)
     endUtc = new Date(event.end.dateTime)
   } else if (event.start?.date && event.end?.date) {
-    startUtc = new Date(`${event.start.date}T00:00:00.000Z`)
-    endUtc = new Date(`${event.end.date}T00:00:00.000Z`)
+    startUtc = localToUTC(event.start.date, '00:00', timezone)
+    endUtc = localToUTC(event.end.date, '00:00', timezone)
   }
 
   if (!startUtc || !endUtc || isNaN(startUtc.getTime()) || isNaN(endUtc.getTime())) {
@@ -239,33 +239,37 @@ export const parseEventToBusySlot = (event) => {
 export const performInitialCalendarSync = async (userId) => {
   const { accessToken, calendarId } = await getValidAccessToken(userId)
 
-  const now = new Date()
-  const timeMin = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-  const timeMax = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { timezone: true },
+  })
+  const timezone = user?.timezone || 'UTC'
 
   const { items, nextSyncToken } = await fetchCalendarEvents({
     accessToken,
     calendarId,
-    timeMin,
-    timeMax,
   })
 
+  const now = new Date()
+  const minKeepTime = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
   const busySlotsMap = new Map()
 
   for (const item of items) {
-    const parsed = parseEventToBusySlot(item)
+    const parsed = parseEventToBusySlot(item, timezone)
     if (!parsed) continue
 
     if (parsed.isCancelled) {
       busySlotsMap.delete(parsed.googleEventId)
     } else {
-      busySlotsMap.set(parsed.googleEventId, {
-        userId,
-        calendarId,
-        googleEventId: parsed.googleEventId,
-        startTime: parsed.startTime,
-        endTime: parsed.endTime,
-      })
+      if (parsed.endTime >= minKeepTime) {
+        busySlotsMap.set(parsed.googleEventId, {
+          userId,
+          calendarId,
+          googleEventId: parsed.googleEventId,
+          startTime: parsed.startTime,
+          endTime: parsed.endTime,
+        })
+      }
     }
   }
 
@@ -311,6 +315,12 @@ export const syncUserCalendar = async (userId) => {
   try {
     const { accessToken, calendarId } = await getValidAccessToken(userId)
 
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { timezone: true },
+    })
+    const timezone = user?.timezone || 'UTC'
+
     const { items, nextSyncToken } = await fetchCalendarEvents({
       accessToken,
       calendarId,
@@ -318,7 +328,7 @@ export const syncUserCalendar = async (userId) => {
     })
 
     for (const item of items) {
-      const parsed = parseEventToBusySlot(item)
+      const parsed = parseEventToBusySlot(item, timezone)
       if (!parsed) continue
 
       if (parsed.isCancelled) {

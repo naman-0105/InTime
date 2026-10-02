@@ -65,7 +65,7 @@ export const Login = () => {
           )}
 
           <a
-            href="/api/auth/google"
+            href={`${import.meta.env.VITE_API_URL}/api/auth/google`}
             className="w-full h-10 bg-white hover:bg-neutral-50 border border-neutral-300 rounded-md text-sm font-medium text-neutral-800 flex items-center justify-center space-x-2.5 transition-colors cursor-pointer shadow-xs mb-4"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">

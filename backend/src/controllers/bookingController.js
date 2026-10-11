@@ -1,6 +1,6 @@
 import prisma from '../db/prisma.js'
 import { enqueueEmail } from '../queues/emailQueue.js'
-import { validateGoogleAvailability } from '../services/googleCalendarService.js'
+import { checkBookingLimits } from '../services/slotService.js'
 
 export const getBookings = async (req, res, next) => {
   try {
@@ -26,6 +26,7 @@ export const getBookings = async (req, res, next) => {
       where,
       select: {
         id: true,
+        token: true,
         guestName: true,
         guestEmail: true,
         startTime: true,
@@ -259,47 +260,45 @@ export const rescheduleBooking = async (req, res, next) => {
     const bookingEffStart = new Date(startUtc.getTime() - eventType.bufferBeforeMin * 60 * 1000)
     const bookingEffEnd = new Date(endUtc.getTime() + eventType.bufferAfterMin * 60 * 1000)
 
-    const isGoogleAvailable = await validateGoogleAvailability(host.id, bookingEffStart, bookingEffEnd)
-    if (!isGoogleAvailable) {
-      return res.status(409).json({
-        error: 'This time slot is no longer available. Please select another slot.',
-      })
-    }
-
     try {
       const updatedBooking = await prisma.$transaction(
         async (tx) => {
           await tx.$executeRaw`SELECT id FROM users WHERE id = ${host.id}::uuid FOR UPDATE`
 
+          const limitsCheck = await checkBookingLimits({
+            hostId: host.id,
+            eventTypeId: eventType.id,
+            targetDate: startUtc,
+            excludeBookingId: booking.id,
+            tx,
+          })
+
+          if (!limitsCheck.isAllowed) {
+            const err = new Error(limitsCheck.reason || 'This time slot is no longer available. Please select another slot.')
+            err.statusCode = 409
+            throw err
+          }
+
           const searchRangeStart = new Date(startUtc.getTime() - 24 * 60 * 60 * 1000)
           const searchRangeEnd = new Date(endUtc.getTime() + 24 * 60 * 60 * 1000)
 
-          const [confirmedBookings, externalBusySlots] = await Promise.all([
-            tx.booking.findMany({
-              where: {
-                hostId: host.id,
-                status: 'CONFIRMED',
-                id: { not: booking.id },
-                startTime: { lt: searchRangeEnd },
-                endTime: { gt: searchRangeStart },
-              },
-              include: {
-                eventType: {
-                  select: {
-                    bufferBeforeMin: true,
-                    bufferAfterMin: true,
-                  },
+          const confirmedBookings = await tx.booking.findMany({
+            where: {
+              hostId: host.id,
+              status: 'CONFIRMED',
+              id: { not: booking.id },
+              startTime: { lt: searchRangeEnd },
+              endTime: { gt: searchRangeStart },
+            },
+            include: {
+              eventType: {
+                select: {
+                  bufferBeforeMin: true,
+                  bufferAfterMin: true,
                 },
               },
-            }),
-            tx.externalBusySlot.findMany({
-              where: {
-                userId: host.id,
-                startTime: { lt: searchRangeEnd },
-                endTime: { gt: searchRangeStart },
-              },
-            }),
-          ])
+            },
+          })
 
           const hasBookingConflict = confirmedBookings.some((b) => {
             const bBufferBefore = (b.eventType?.bufferBeforeMin || 0) * 60 * 1000
@@ -311,16 +310,6 @@ export const rescheduleBooking = async (req, res, next) => {
           })
 
           if (hasBookingConflict) {
-            const err = new Error('This time slot is no longer available. Please select another slot.')
-            err.statusCode = 409
-            throw err
-          }
-
-          const hasExternalConflict = externalBusySlots.some((slot) => {
-            return bookingEffStart < slot.endTime && bookingEffEnd > slot.startTime
-          })
-
-          if (hasExternalConflict) {
             const err = new Error('This time slot is no longer available. Please select another slot.')
             err.statusCode = 409
             throw err

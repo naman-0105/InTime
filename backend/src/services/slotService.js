@@ -44,15 +44,142 @@ export const localToUTC = (dateStr, timeStr, timeZone) => {
   return new Date(baseUtc - offset)
 }
 
+export const getPeriodBounds = (dateInput, period = 'DAY', timezone = 'UTC') => {
+  let dateObj
+  if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.trim())) {
+    const [y, m, d] = dateInput.trim().split('-').map(Number)
+    dateObj = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+  } else {
+    dateObj = new Date(dateInput)
+  }
+
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone || 'UTC',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hourCycle: 'h23',
+  })
+  const parts = formatter.formatToParts(dateObj)
+  const map = {}
+  for (const p of parts) map[p.type] = p.value
+
+  const year = parseInt(map.year, 10)
+  const month = parseInt(map.month, 10)
+  const day = parseInt(map.day, 10)
+
+  const yStr = String(year)
+  const mStr = String(month).padStart(2, '0')
+  const dStr = String(day).padStart(2, '0')
+  const startUtc = localToUTC(`${yStr}-${mStr}-${dStr}`, '00:00', timezone)
+
+  const nextDayDate = new Date(Date.UTC(year, month - 1, day + 1, 12, 0, 0))
+  const nextParts = formatter.formatToParts(nextDayDate)
+  const nextMap = {}
+  for (const p of nextParts) nextMap[p.type] = p.value
+  const nextY = nextMap.year
+  const nextM = String(nextMap.month).padStart(2, '0')
+  const nextD = String(nextMap.day).padStart(2, '0')
+  const endUtc = localToUTC(`${nextY}-${nextM}-${nextD}`, '00:00', timezone)
+
+  return { startUtc, endUtc }
+}
+
+export const checkBookingLimits = async ({
+  hostId,
+  eventTypeId,
+  targetDate,
+  excludeBookingId = null,
+  tx = prisma,
+}) => {
+  const [host, eventType] = await Promise.all([
+    tx.user.findUnique({
+      where: { id: hostId },
+      select: { id: true, timezone: true, maxBookingsCount: true, maxBookingsPeriod: true },
+    }),
+    eventTypeId
+      ? tx.eventType.findUnique({
+          where: { id: eventTypeId },
+          select: { id: true, name: true, maxBookingsCount: true, maxBookingsPeriod: true },
+        })
+      : null,
+  ])
+
+  if (!host) {
+    return { isAllowed: true }
+  }
+
+  const timezone = host.timezone || 'UTC'
+
+  if (eventType && eventType.maxBookingsCount && eventType.maxBookingsCount > 0) {
+    const bounds = getPeriodBounds(targetDate, 'DAY', timezone)
+    if (bounds) {
+      const eventWhere = {
+        eventTypeId: eventType.id,
+        status: 'CONFIRMED',
+        startTime: {
+          gte: bounds.startUtc,
+          lt: bounds.endUtc,
+        },
+      }
+      if (excludeBookingId) {
+        eventWhere.id = { not: excludeBookingId }
+      }
+
+      const count = await tx.booking.count({ where: eventWhere })
+      if (count >= eventType.maxBookingsCount) {
+        return {
+          isAllowed: false,
+          reason: `Maximum daily booking limit of ${eventType.maxBookingsCount} reached for this event type.`,
+          period: 'DAY',
+          scope: 'event',
+        }
+      }
+    }
+  }
+
+  if (host.maxBookingsCount && host.maxBookingsCount > 0) {
+    const bounds = getPeriodBounds(targetDate, 'DAY', timezone)
+    if (bounds) {
+      const hostWhere = {
+        hostId: host.id,
+        status: 'CONFIRMED',
+        startTime: {
+          gte: bounds.startUtc,
+          lt: bounds.endUtc,
+        },
+      }
+      if (excludeBookingId) {
+        hostWhere.id = { not: excludeBookingId }
+      }
+
+      const count = await tx.booking.count({ where: hostWhere })
+      if (count >= host.maxBookingsCount) {
+        return {
+          isAllowed: false,
+          reason: `Host has reached their daily booking limit of ${host.maxBookingsCount} across all event types.`,
+          period: 'DAY',
+          scope: 'host',
+        }
+      }
+    }
+  }
+
+  return { isAllowed: true }
+}
+
 export const generateAvailableSlots = async ({
   hostId,
+  eventTypeId,
   timezone,
   durationMin,
+  slotIntervalMin,
   dateStr,
   minNoticeMin = 0,
   maxNoticeDays = 60,
   bufferBeforeMin = 0,
   bufferAfterMin = 0,
+  excludeBookingId = null,
 }) => {
   const parsedDate = new Date(`${dateStr}T00:00:00.000Z`)
   if (isNaN(parsedDate.getTime())) {
@@ -62,6 +189,16 @@ export const generateAvailableSlots = async ({
   const now = new Date()
   const maxNoticeLimit = new Date(now.getTime() + maxNoticeDays * 24 * 60 * 60 * 1000)
   if (parsedDate.getTime() > maxNoticeLimit.getTime()) {
+    return []
+  }
+
+  const limitsCheck = await checkBookingLimits({
+    hostId,
+    eventTypeId,
+    targetDate: dateStr,
+    excludeBookingId,
+  })
+  if (!limitsCheck.isAllowed) {
     return []
   }
 
@@ -100,13 +237,16 @@ export const generateAvailableSlots = async ({
     intervals = rules.map((r) => ({ startTime: r.startTime, endTime: r.endTime }))
   }
 
+  const intervalMin =
+    slotIntervalMin && Number(slotIntervalMin) > 0 ? Number(slotIntervalMin) : durationMin
+
   const candidateSlots = []
 
   for (const interval of intervals) {
     const startMin = timeToMinutes(interval.startTime)
     const endMin = timeToMinutes(interval.endTime)
 
-    for (let m = startMin; m + durationMin <= endMin; m += durationMin) {
+    for (let m = startMin; m + durationMin <= endMin; m += intervalMin) {
       const slotStartTimeStr = minutesToTime(m)
       const slotEndTimeStr = minutesToTime(m + durationMin)
 
@@ -131,31 +271,27 @@ export const generateAvailableSlots = async ({
   const searchStartUtc = new Date(dayStartUtc.getTime() - 24 * 60 * 60 * 1000)
   const searchEndUtc = new Date(dayEndUtc.getTime() + 24 * 60 * 60 * 1000)
 
-  const [confirmedBookings, externalBusySlots] = await Promise.all([
-    prisma.booking.findMany({
-      where: {
-        hostId,
-        status: 'CONFIRMED',
-        startTime: { lt: searchEndUtc },
-        endTime: { gt: searchStartUtc },
-      },
-      include: {
-        eventType: {
-          select: {
-            bufferBeforeMin: true,
-            bufferAfterMin: true,
-          },
+  const bookingWhere = {
+    hostId,
+    status: 'CONFIRMED',
+    startTime: { lt: searchEndUtc },
+    endTime: { gt: searchStartUtc },
+  }
+  if (excludeBookingId) {
+    bookingWhere.id = { not: excludeBookingId }
+  }
+
+  const confirmedBookings = await prisma.booking.findMany({
+    where: bookingWhere,
+    include: {
+      eventType: {
+        select: {
+          bufferBeforeMin: true,
+          bufferAfterMin: true,
         },
       },
-    }),
-    prisma.externalBusySlot.findMany({
-      where: {
-        userId: hostId,
-        startTime: { lt: searchEndUtc },
-        endTime: { gt: searchStartUtc },
-      },
-    }),
-  ])
+    },
+  })
 
   const minNoticeLimit = new Date(now.getTime() + minNoticeMin * 60 * 1000)
 
@@ -164,28 +300,25 @@ export const generateAvailableSlots = async ({
       return false
     }
 
-    const slotEffStart = new Date(slot.startTime.getTime() - bufferBeforeMin * 60 * 1000)
-    const slotEffEnd = new Date(slot.endTime.getTime() + bufferAfterMin * 60 * 1000)
+    const candidateBlockedStart = new Date(
+      slot.startTime.getTime() - bufferBeforeMin * 60 * 1000
+    )
+    const candidateBlockedEnd = new Date(
+      slot.endTime.getTime() + bufferAfterMin * 60 * 1000
+    )
 
-    const hasBookingConflict = confirmedBookings.some((booking) => {
+    const hasConflict = confirmedBookings.some((booking) => {
       const bBufferBefore = (booking.eventType?.bufferBeforeMin || 0) * 60 * 1000
       const bBufferAfter = (booking.eventType?.bufferAfterMin || 0) * 60 * 1000
-      const bEffStart = new Date(booking.startTime.getTime() - bBufferBefore)
-      const bEffEnd = new Date(booking.endTime.getTime() + bBufferAfter)
+      const existingBlockedStart = new Date(booking.startTime.getTime() - bBufferBefore)
+      const existingBlockedEnd = new Date(booking.endTime.getTime() + bBufferAfter)
 
-      return slotEffStart < bEffEnd && slotEffEnd > bEffStart
+      return candidateBlockedStart < existingBlockedEnd && candidateBlockedEnd > existingBlockedStart
     })
 
-    if (hasBookingConflict) {
-      return false
-    }
-
-    const hasExternalConflict = externalBusySlots.some((busySlot) => {
-      return slotEffStart < busySlot.endTime && slotEffEnd > busySlot.startTime
-    })
-
-    return !hasExternalConflict
+    return !hasConflict
   })
 
   return availableSlots
 }
+

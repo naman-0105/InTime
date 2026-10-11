@@ -30,6 +30,9 @@ export const eventService = {
     slug?: string
     description?: string
     durationMin: number
+    slotIntervalMin?: number | null
+    maxBookingsCount?: number | null
+    maxBookingsPeriod?: 'DAY' | 'WEEK' | 'MONTH' | null
     isActive?: boolean
     minNoticeMin?: number
     maxNoticeDays?: number
@@ -58,6 +61,9 @@ export const eventService = {
       slug?: string
       description?: string
       durationMin?: number
+      slotIntervalMin?: number | null
+      maxBookingsCount?: number | null
+      maxBookingsPeriod?: 'DAY' | 'WEEK' | 'MONTH' | null
       isActive?: boolean
       minNoticeMin?: number
       maxNoticeDays?: number

@@ -219,3 +219,64 @@ export const deleteOverride = async (req, res, next) => {
     next(error)
   }
 }
+
+export const getHostLimits = async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        maxBookingsCount: true,
+        maxBookingsPeriod: true,
+      },
+    })
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    return res.status(200).json({
+      maxBookingsCount: user.maxBookingsCount,
+      maxBookingsPeriod: user.maxBookingsCount && user.maxBookingsCount > 0 ? 'DAY' : null,
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const setHostLimits = async (req, res, next) => {
+  try {
+    const { maxBookingsCount } = req.body
+
+    let parsedMaxBookingsCount = null
+    let parsedMaxBookingsPeriod = null
+
+    if (maxBookingsCount !== undefined && maxBookingsCount !== null && maxBookingsCount !== '' && maxBookingsCount !== 0) {
+      const count = parseInt(maxBookingsCount, 10)
+      if (isNaN(count) || count <= 0) {
+        return res.status(400).json({ error: 'Max bookings count must be a positive integer' })
+      }
+      parsedMaxBookingsCount = count
+      parsedMaxBookingsPeriod = 'DAY'
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        maxBookingsCount: parsedMaxBookingsCount,
+        maxBookingsPeriod: parsedMaxBookingsPeriod,
+      },
+      select: {
+        maxBookingsCount: true,
+        maxBookingsPeriod: true,
+      },
+    })
+
+    return res.status(200).json({
+      maxBookingsCount: updatedUser.maxBookingsCount,
+      maxBookingsPeriod: updatedUser.maxBookingsPeriod,
+      message: 'Host booking limits updated successfully',
+    })
+  } catch (error) {
+    next(error)
+  }
+}

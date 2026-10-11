@@ -87,4 +87,33 @@ export const availabilityService = {
       throw new Error(json.error || 'Failed to delete override')
     }
   },
+
+  async getHostLimits(): Promise<{ maxBookingsCount: number | null; maxBookingsPeriod: 'DAY' | 'WEEK' | 'MONTH' | null }> {
+    const res = await fetch(`${API_BASE}/limits`, {
+      credentials: 'include',
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      throw new Error(json.error || 'Failed to fetch host booking limits')
+    }
+    return json
+  },
+
+  async setHostLimits(data: {
+    maxBookingsCount: number | null
+    maxBookingsPeriod: 'DAY' | 'WEEK' | 'MONTH' | null
+  }): Promise<{ maxBookingsCount: number | null; maxBookingsPeriod: 'DAY' | 'WEEK' | 'MONTH' | null; message?: string }> {
+    const res = await fetch(`${API_BASE}/limits`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      throw new Error(json.error || 'Failed to update host booking limits')
+    }
+    return json
+  },
 }
+

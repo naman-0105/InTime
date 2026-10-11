@@ -20,9 +20,17 @@ export const publicService = {
   async getSlots(
     username: string,
     eventSlug: string,
-    date: string
+    date: string,
+    rescheduleToken?: string,
+    bookingId?: string
   ): Promise<SlotsResponse> {
-    const res = await fetch(`${API_BASE}/${username}/${eventSlug}/slots?date=${date}`)
+    const params = new URLSearchParams({ date })
+    if (rescheduleToken) params.append('rescheduleToken', rescheduleToken)
+    if (bookingId) params.append('bookingId', bookingId)
+
+    const res = await fetch(`${API_BASE}/${username}/${eventSlug}/slots?${params.toString()}`, {
+      credentials: 'include',
+    })
     const json = await res.json()
     if (!res.ok) {
       throw new Error(json.error || 'Failed to load available slots')

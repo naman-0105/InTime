@@ -58,6 +58,9 @@ export const createEvent = async (req, res, next) => {
       slug,
       description,
       durationMin,
+      slotIntervalMin,
+      maxBookingsCount,
+      maxBookingsPeriod,
       isActive,
       minNoticeMin,
       maxNoticeDays,
@@ -74,6 +77,24 @@ export const createEvent = async (req, res, next) => {
     const duration = parseInt(durationMin, 10)
     if (isNaN(duration) || duration <= 0) {
       return res.status(400).json({ error: 'Duration must be a positive number of minutes' })
+    }
+
+    let parsedSlotInterval = null
+    if (slotIntervalMin !== undefined && slotIntervalMin !== null && slotIntervalMin !== '') {
+      parsedSlotInterval = parseInt(slotIntervalMin, 10)
+      if (isNaN(parsedSlotInterval) || parsedSlotInterval <= 0) {
+        return res.status(400).json({ error: 'Start-time interval must be a positive number of minutes' })
+      }
+    }
+
+    let parsedMaxBookingsCount = null
+    let parsedMaxBookingsPeriod = null
+    if (maxBookingsCount !== undefined && maxBookingsCount !== null && maxBookingsCount !== '') {
+      parsedMaxBookingsCount = parseInt(maxBookingsCount, 10)
+      if (isNaN(parsedMaxBookingsCount) || parsedMaxBookingsCount <= 0) {
+        return res.status(400).json({ error: 'Max bookings count must be a positive integer' })
+      }
+      parsedMaxBookingsPeriod = 'DAY'
     }
 
     const eventSlug = slugify(slug || name)
@@ -121,6 +142,9 @@ export const createEvent = async (req, res, next) => {
         slug: eventSlug,
         description: description ? description.trim() : null,
         durationMin: duration,
+        slotIntervalMin: parsedSlotInterval,
+        maxBookingsCount: parsedMaxBookingsCount,
+        maxBookingsPeriod: parsedMaxBookingsPeriod,
         isActive: isActive !== undefined ? Boolean(isActive) : true,
         minNoticeMin: parsedMinNotice,
         maxNoticeDays: parsedMaxNotice,
@@ -152,6 +176,9 @@ export const updateEvent = async (req, res, next) => {
       slug,
       description,
       durationMin,
+      slotIntervalMin,
+      maxBookingsCount,
+      maxBookingsPeriod,
       isActive,
       minNoticeMin,
       maxNoticeDays,
@@ -195,6 +222,35 @@ export const updateEvent = async (req, res, next) => {
         return res.status(400).json({ error: 'Duration must be a positive number of minutes' })
       }
       duration = parsedDuration
+    }
+
+    let parsedSlotInterval = existingEvent.slotIntervalMin
+    if (slotIntervalMin !== undefined) {
+      if (slotIntervalMin === null || slotIntervalMin === '') {
+        parsedSlotInterval = null
+      } else {
+        const parsed = parseInt(slotIntervalMin, 10)
+        if (isNaN(parsed) || parsed <= 0) {
+          return res.status(400).json({ error: 'Start-time interval must be a positive number of minutes' })
+        }
+        parsedSlotInterval = parsed
+      }
+    }
+
+    let parsedMaxBookingsCount = existingEvent.maxBookingsCount
+    let parsedMaxBookingsPeriod = existingEvent.maxBookingsPeriod ? 'DAY' : null
+    if (maxBookingsCount !== undefined || maxBookingsPeriod !== undefined) {
+      if (maxBookingsCount === null || maxBookingsCount === '' || maxBookingsCount === 0) {
+        parsedMaxBookingsCount = null
+        parsedMaxBookingsPeriod = null
+      } else {
+        const count = parseInt(maxBookingsCount, 10)
+        if (isNaN(count) || count <= 0) {
+          return res.status(400).json({ error: 'Max bookings count must be a positive integer' })
+        }
+        parsedMaxBookingsCount = count
+        parsedMaxBookingsPeriod = 'DAY'
+      }
     }
 
     const parsedMinNotice =
@@ -252,6 +308,9 @@ export const updateEvent = async (req, res, next) => {
               : null
             : existingEvent.description,
         durationMin: duration,
+        slotIntervalMin: parsedSlotInterval,
+        maxBookingsCount: parsedMaxBookingsCount,
+        maxBookingsPeriod: parsedMaxBookingsPeriod,
         isActive: isActive !== undefined ? Boolean(isActive) : existingEvent.isActive,
         minNoticeMin: parsedMinNotice,
         maxNoticeDays: parsedMaxNotice,

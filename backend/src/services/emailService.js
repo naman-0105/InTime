@@ -5,15 +5,26 @@ const resendClient = process.env.RESEND_API_KEY
   : null
 
 const sendEmail = async ({ to, subject, html }) => {
-  const from = process.env.EMAIL_FROM || 'InTime <onboarding@resend.dev>'
+  let from = process.env.EMAIL_FROM || 'InTime <onboarding@resend.dev>'
+  if (from && !from.includes('<') && from.includes('@')) {
+    from = `InTime <${from}>`
+  }
 
   if (resendClient) {
-    return await resendClient.emails.send({
+    const res = await resendClient.emails.send({
       from,
       to,
       subject,
       html,
     })
+
+    if (res.error) {
+      console.error(`[Resend API Error sending to ${to}]:`, res.error)
+      throw new Error(res.error.message || `Failed to send email to ${to}`)
+    }
+
+    console.log(`[Email Sent via Resend] ID: ${res.data?.id} to ${to}`)
+    return res.data
   }
 
   if (process.env.NODE_ENV !== 'production') {
@@ -203,7 +214,7 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
       </div>
     `
 
-    await Promise.allSettled([
+    const results = await Promise.allSettled([
       sendEmail({
         to: booking.guestEmail,
         subject: guestSubject,
@@ -215,6 +226,13 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
         html: hostHtml,
       }),
     ])
+
+    results.forEach((r, idx) => {
+      if (r.status === 'rejected') {
+        const recipient = idx === 0 ? `Guest (${booking.guestEmail})` : `Host (${host.email})`
+        console.error(`[Email Error] Confirmation email to ${recipient} failed:`, r.reason?.message || r.reason)
+      }
+    })
   } catch (error) {
     console.error('Failed to send booking confirmation emails:', error)
   }
@@ -303,7 +321,7 @@ export const sendBookingRescheduledEmails = async ({
       </div>
     `
 
-    await Promise.allSettled([
+    const results = await Promise.allSettled([
       sendEmail({
         to: booking.guestEmail,
         subject: guestSubject,
@@ -315,6 +333,13 @@ export const sendBookingRescheduledEmails = async ({
         html: hostHtml,
       }),
     ])
+
+    results.forEach((r, idx) => {
+      if (r.status === 'rejected') {
+        const recipient = idx === 0 ? `Guest (${booking.guestEmail})` : `Host (${host.email})`
+        console.error(`[Email Error] Reschedule email to ${recipient} failed:`, r.reason?.message || r.reason)
+      }
+    })
   } catch (error) {
     console.error('Failed to send booking reschedule emails:', error)
   }
@@ -365,7 +390,7 @@ export const sendBookingCancellationEmails = async ({ booking, host, eventType }
       </div>
     `
 
-    await Promise.allSettled([
+    const results = await Promise.allSettled([
       sendEmail({
         to: booking.guestEmail,
         subject: guestSubject,
@@ -377,6 +402,13 @@ export const sendBookingCancellationEmails = async ({ booking, host, eventType }
         html: hostHtml,
       }),
     ])
+
+    results.forEach((r, idx) => {
+      if (r.status === 'rejected') {
+        const recipient = idx === 0 ? `Guest (${booking.guestEmail})` : `Host (${host.email})`
+        console.error(`[Email Error] Cancellation email to ${recipient} failed:`, r.reason?.message || r.reason)
+      }
+    })
   } catch (error) {
     console.error('Failed to send booking cancellation emails:', error)
   }

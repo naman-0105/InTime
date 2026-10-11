@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { availabilityService } from '../services/availabilityService'
 import type { AvailabilityOverride } from '../types'
-import { Plus, Trash2, Globe, Check, AlertCircle, Calendar as CalendarIcon, Clock } from 'lucide-react'
+import { Plus, Trash2, Globe, Check, AlertCircle, Calendar as CalendarIcon, Clock, Shield } from 'lucide-react'
 
 interface TimeInterval {
   startTime: string
@@ -28,7 +28,7 @@ const DAYS_CONFIG = [
 
 export const Availability = () => {
   const { user } = useAuth()
-  const [activeTab, setActiveTab] = useState<'weekly' | 'overrides'>('weekly')
+  const [activeTab, setActiveTab] = useState<'weekly' | 'overrides' | 'limits'>('weekly')
 
   const [schedule, setSchedule] = useState<DaySchedule[]>([])
   const [loadingSchedule, setLoadingSchedule] = useState(true)
@@ -37,6 +37,11 @@ export const Availability = () => {
   const [overrides, setOverrides] = useState<AvailabilityOverride[]>([])
   const [loadingOverrides, setLoadingOverrides] = useState(true)
   const [addingOverride, setAddingOverride] = useState(false)
+
+  const [hostLimitEnabled, setHostLimitEnabled] = useState(false)
+  const [hostMaxBookingsCount, setHostMaxBookingsCount] = useState<number>(10)
+  const [loadingLimits, setLoadingLimits] = useState(true)
+  const [savingLimits, setSavingLimits] = useState(false)
 
   const [overrideDate, setOverrideDate] = useState('')
   const [overrideIsAvailable, setOverrideIsAvailable] = useState(false)
@@ -102,10 +107,56 @@ export const Availability = () => {
     }
   }
 
+  const loadHostLimits = async () => {
+    try {
+      setLoadingLimits(true)
+      const data = await availabilityService.getHostLimits()
+      if (data.maxBookingsCount && data.maxBookingsCount > 0) {
+        setHostLimitEnabled(true)
+        setHostMaxBookingsCount(data.maxBookingsCount)
+      } else {
+        setHostLimitEnabled(false)
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message)
+      } else {
+        setError('Failed to load booking limits')
+      }
+    } finally {
+      setLoadingLimits(false)
+    }
+  }
+
   useEffect(() => {
     loadWeeklyAvailability()
     loadOverrides()
+    loadHostLimits()
   }, [])
+
+  const handleSaveHostLimits = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setSuccessMessage('')
+    setSavingLimits(true)
+
+    try {
+      await availabilityService.setHostLimits({
+        maxBookingsCount: hostLimitEnabled && hostMaxBookingsCount > 0 ? hostMaxBookingsCount : null,
+        maxBookingsPeriod: hostLimitEnabled && hostMaxBookingsCount > 0 ? 'DAY' : null,
+      })
+      setSuccessMessage('Host booking limits saved successfully')
+      setTimeout(() => setSuccessMessage(''), 3000)
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message)
+      } else {
+        setError('Failed to save host booking limits')
+      }
+    } finally {
+      setSavingLimits(false)
+    }
+  }
 
   const toggleDay = (dayOfWeek: number) => {
     setSchedule((prev) =>
@@ -348,6 +399,26 @@ export const Availability = () => {
           {overrides.length > 0 && (
             <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-neutral-100 text-neutral-700 font-mono">
               {overrides.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('limits')
+            setError('')
+          }}
+          className={`px-4 py-2 text-xs font-medium border-b-2 -mb-px transition-colors cursor-pointer flex items-center space-x-2 ${
+            activeTab === 'limits'
+              ? 'border-neutral-900 text-neutral-900 font-semibold'
+              : 'border-transparent text-neutral-500 hover:text-neutral-900'
+          }`}
+        >
+          <Shield className="w-3.5 h-3.5" />
+          <span>Booking Limits</span>
+          {hostLimitEnabled && (
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-neutral-900 text-white font-mono">
+              On
             </span>
           )}
         </button>
@@ -611,6 +682,81 @@ export const Availability = () => {
           </div>
         </div>
       )}
+
+      {activeTab === 'limits' && (
+        <div className="bg-white border border-neutral-200 rounded-lg p-6 shadow-xs space-y-6">
+          <div>
+            <h2 className="text-sm font-semibold text-neutral-900 flex items-center space-x-2">
+              <Shield className="w-4 h-4 text-neutral-700" />
+              <span>Host-Level Booking Limits</span>
+            </h2>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              Set an overall limit across all your event types combined.
+            </p>
+          </div>
+
+          {loadingLimits ? (
+            <div className="py-8 text-center text-neutral-500 text-xs">Loading booking limits...</div>
+          ) : (
+            <form onSubmit={handleSaveHostLimits} className="space-y-6">
+              <div className="space-y-4">
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hostLimitEnabled}
+                    onChange={(e) => setHostLimitEnabled(e.target.checked)}
+                    className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900"
+                  />
+                  <div>
+                    <span className="text-xs font-medium text-neutral-900">Enable host-wide daily booking limit</span>
+                    <p className="text-[11px] text-neutral-500">
+                      When enabled, your calendar will automatically close once this daily limit is reached across all your event types.
+                    </p>
+                  </div>
+                </label>
+
+                {hostLimitEnabled && (
+                  <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-md space-y-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-xs text-neutral-700 font-medium">Allow maximum:</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="1000"
+                        value={hostMaxBookingsCount}
+                        onChange={(e) => setHostMaxBookingsCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        className="w-24 px-3 h-9 bg-white border border-neutral-300 rounded-md text-xs text-neutral-900 focus:outline-none focus:border-neutral-900"
+                      />
+                      <span className="text-xs text-neutral-700 font-medium">bookings per day</span>
+                    </div>
+                    <p className="text-[11px] text-neutral-500">
+                      Counts all confirmed bookings across all your active event types in your timezone ({user?.timezone || 'UTC'}).
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 border-t border-neutral-200 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={savingLimits}
+                  className="inline-flex items-center justify-center space-x-2 h-9 px-4 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-medium rounded-md transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  {savingLimits ? (
+                    <span>Saving...</span>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save Booking Limits</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
     </div>
   )
 }
+

@@ -12,6 +12,9 @@ export const EventEdit = () => {
   const [description, setDescription] = useState('')
   const [location, setLocation] = useState('')
   const [durationMin, setDurationMin] = useState(30)
+  const [slotIntervalMin, setSlotIntervalMin] = useState<number | ''>('')
+  const [limitEnabled, setLimitEnabled] = useState(false)
+  const [maxBookingsCount, setMaxBookingsCount] = useState<number>(5)
   const [isActive, setIsActive] = useState(true)
   const [minNoticeMin, setMinNoticeMin] = useState(0)
   const [maxNoticeDays, setMaxNoticeDays] = useState(60)
@@ -35,6 +38,13 @@ export const EventEdit = () => {
         setDescription(event.description || '')
         setLocation(event.location || '')
         setDurationMin(event.durationMin)
+        setSlotIntervalMin(event.slotIntervalMin ?? '')
+        if (event.maxBookingsCount && event.maxBookingsCount > 0) {
+          setLimitEnabled(true)
+          setMaxBookingsCount(event.maxBookingsCount)
+        } else {
+          setLimitEnabled(false)
+        }
         setIsActive(event.isActive)
         setMinNoticeMin(event.minNoticeMin ?? 0)
         setMaxNoticeDays(event.maxNoticeDays ?? 60)
@@ -111,6 +121,9 @@ export const EventEdit = () => {
         description: description || undefined,
         location: location ? location.trim() : null,
         durationMin,
+        slotIntervalMin: slotIntervalMin ? Number(slotIntervalMin) : null,
+        maxBookingsCount: limitEnabled && maxBookingsCount > 0 ? maxBookingsCount : null,
+        maxBookingsPeriod: limitEnabled && maxBookingsCount > 0 ? 'DAY' : null,
         isActive,
         minNoticeMin,
         maxNoticeDays,
@@ -379,6 +392,66 @@ export const EventEdit = () => {
                 </select>
                 <p className="text-[11px] text-neutral-400 mt-1">
                   Reserved cool-down or notes time after meeting ends.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-700 mb-1.5 flex items-center space-x-1.5">
+                  <Clock className="w-3.5 h-3.5 text-neutral-500" />
+                  <span>Start-Time Interval</span>
+                </label>
+                <select
+                  value={slotIntervalMin === '' ? '' : slotIntervalMin}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setSlotIntervalMin(v === '' ? '' : parseInt(v, 10))
+                  }}
+                  className="w-full px-3 h-10 bg-white border border-neutral-300 rounded-md text-xs text-neutral-900 focus:outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 transition-colors cursor-pointer"
+                >
+                  <option value="">Default (Every {durationMin} min - same as duration)</option>
+                  <option value={10}>Every 10 minutes</option>
+                  <option value={15}>Every 15 minutes</option>
+                  <option value={20}>Every 20 minutes</option>
+                  <option value={30}>Every 30 minutes</option>
+                  <option value={45}>Every 45 minutes</option>
+                  <option value={60}>Every 60 minutes</option>
+                </select>
+                <p className="text-[11px] text-neutral-400 mt-1">
+                  How frequently start-time slots are offered to invitees.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-neutral-700 mb-1.5">
+                  Daily Booking Limit (Optional)
+                </label>
+                <div className="space-y-2">
+                  <label className="inline-flex items-center space-x-2 text-xs text-neutral-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={limitEnabled}
+                      onChange={(e) => setLimitEnabled(e.target.checked)}
+                      className="rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900"
+                    />
+                    <span>Limit maximum bookings per day for this event</span>
+                  </label>
+                  {limitEnabled && (
+                    <div className="flex items-center space-x-2 pt-1">
+                      <span className="text-xs text-neutral-500">Allow up to</span>
+                      <input
+                        type="number"
+                        min="1"
+                        max="1000"
+                        value={maxBookingsCount}
+                        onChange={(e) => setMaxBookingsCount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        className="w-20 px-2.5 h-8 bg-white border border-neutral-300 rounded-md text-xs text-neutral-900 focus:outline-none focus:border-neutral-900"
+                      />
+                      <span className="text-xs text-neutral-500">bookings per day</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[11px] text-neutral-400 mt-1">
+                  Prevent receiving more than a set number of bookings on any single day.
                 </p>
               </div>
             </div>

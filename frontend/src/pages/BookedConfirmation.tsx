@@ -76,7 +76,8 @@ export const BookedConfirmation = () => {
         const data = await publicService.getSlots(
           booking.host!.username!,
           booking.eventType!.slug!,
-          selectedDate
+          selectedDate,
+          token
         )
         setSlots(data.slots)
       } catch {
@@ -87,7 +88,7 @@ export const BookedConfirmation = () => {
     }
 
     loadSlots()
-  }, [isRescheduling, booking, selectedDate])
+  }, [isRescheduling, booking, selectedDate, token])
 
   const handleCancelBooking = async () => {
     if (!token) return

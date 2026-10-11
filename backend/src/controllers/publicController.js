@@ -1,9 +1,8 @@
 import crypto from 'crypto'
 import prisma from '../db/prisma.js'
-import { generateAvailableSlots } from '../services/slotService.js'
+import { generateAvailableSlots, checkBookingLimits } from '../services/slotService.js'
 import { isValidEmail } from '../utils/validation.js'
 import { enqueueEmail } from '../queues/emailQueue.js'
-import { validateGoogleAvailability } from '../services/googleCalendarService.js'
 
 export const getPublicEvent = async (req, res, next) => {
   try {
@@ -83,7 +82,7 @@ export const getPublicEvent = async (req, res, next) => {
 export const getPublicEventSlots = async (req, res, next) => {
   try {
     const { username, eventSlug } = req.params
-    const { date } = req.query
+    const { date, rescheduleToken, bookingId } = req.query
 
     if (!username || !eventSlug || !date) {
       return res.status(400).json({ error: 'Username, eventSlug, and date query parameter are required' })
@@ -118,6 +117,7 @@ export const getPublicEventSlots = async (req, res, next) => {
       select: {
         id: true,
         durationMin: true,
+        slotIntervalMin: true,
         isActive: true,
         minNoticeMin: true,
         maxNoticeDays: true,
@@ -130,15 +130,37 @@ export const getPublicEventSlots = async (req, res, next) => {
       return res.status(404).json({ error: 'Event type not found or is inactive' })
     }
 
+    let excludeBookingId = null
+    if (rescheduleToken) {
+      const existingBooking = await prisma.booking.findUnique({
+        where: { token: String(rescheduleToken) },
+        select: { id: true, hostId: true, status: true },
+      })
+      if (existingBooking && existingBooking.hostId === host.id && existingBooking.status === 'CONFIRMED') {
+        excludeBookingId = existingBooking.id
+      }
+    } else if (bookingId && req.user?.id === host.id) {
+      const existingBooking = await prisma.booking.findFirst({
+        where: { id: String(bookingId), hostId: host.id, status: 'CONFIRMED' },
+        select: { id: true },
+      })
+      if (existingBooking) {
+        excludeBookingId = existingBooking.id
+      }
+    }
+
     const slots = await generateAvailableSlots({
       hostId: host.id,
+      eventTypeId: event.id,
       timezone: host.timezone,
       durationMin: event.durationMin,
+      slotIntervalMin: event.slotIntervalMin,
       dateStr: date,
       minNoticeMin: event.minNoticeMin,
       maxNoticeDays: event.maxNoticeDays,
       bufferBeforeMin: event.bufferBeforeMin,
       bufferAfterMin: event.bufferAfterMin,
+      excludeBookingId,
     })
 
     return res.status(200).json({
@@ -283,13 +305,6 @@ export const createBooking = async (req, res, next) => {
     const bookingEffStart = new Date(startUtc.getTime() - event.bufferBeforeMin * 60 * 1000)
     const bookingEffEnd = new Date(endUtc.getTime() + event.bufferAfterMin * 60 * 1000)
 
-    const isGoogleAvailable = await validateGoogleAvailability(host.id, bookingEffStart, bookingEffEnd)
-    if (!isGoogleAvailable) {
-      return res.status(409).json({
-        error: 'This time slot is no longer available. Please select another slot.',
-      })
-    }
-
     try {
       const token = crypto.randomBytes(24).toString('hex')
 
@@ -297,34 +312,38 @@ export const createBooking = async (req, res, next) => {
         async (tx) => {
           await tx.$executeRaw`SELECT id FROM users WHERE id = ${host.id}::uuid FOR UPDATE`
 
+          const limitsCheck = await checkBookingLimits({
+            hostId: host.id,
+            eventTypeId: event.id,
+            targetDate: startUtc,
+            tx,
+          })
+
+          if (!limitsCheck.isAllowed) {
+            const err = new Error(limitsCheck.reason || 'This time slot is no longer available. Please select another slot.')
+            err.statusCode = 409
+            throw err
+          }
+
           const searchRangeStart = new Date(startUtc.getTime() - 24 * 60 * 60 * 1000)
           const searchRangeEnd = new Date(endUtc.getTime() + 24 * 60 * 60 * 1000)
 
-          const [confirmedBookings, externalBusySlots] = await Promise.all([
-            tx.booking.findMany({
-              where: {
-                hostId: host.id,
-                status: 'CONFIRMED',
-                startTime: { lt: searchRangeEnd },
-                endTime: { gt: searchRangeStart },
-              },
-              include: {
-                eventType: {
-                  select: {
-                    bufferBeforeMin: true,
-                    bufferAfterMin: true,
-                  },
+          const confirmedBookings = await tx.booking.findMany({
+            where: {
+              hostId: host.id,
+              status: 'CONFIRMED',
+              startTime: { lt: searchRangeEnd },
+              endTime: { gt: searchRangeStart },
+            },
+            include: {
+              eventType: {
+                select: {
+                  bufferBeforeMin: true,
+                  bufferAfterMin: true,
                 },
               },
-            }),
-            tx.externalBusySlot.findMany({
-              where: {
-                userId: host.id,
-                startTime: { lt: searchRangeEnd },
-                endTime: { gt: searchRangeStart },
-              },
-            }),
-          ])
+            },
+          })
 
           const hasBookingConflict = confirmedBookings.some((b) => {
             const bBufferBefore = (b.eventType?.bufferBeforeMin || 0) * 60 * 1000
@@ -336,16 +355,6 @@ export const createBooking = async (req, res, next) => {
           })
 
           if (hasBookingConflict) {
-            const err = new Error('This time slot is no longer available. Please select another slot.')
-            err.statusCode = 409
-            throw err
-          }
-
-          const hasExternalConflict = externalBusySlots.some((slot) => {
-            return bookingEffStart < slot.endTime && bookingEffEnd > slot.startTime
-          })
-
-          if (hasExternalConflict) {
             const err = new Error('This time slot is no longer available. Please select another slot.')
             err.statusCode = 409
             throw err
@@ -495,47 +504,45 @@ export const rescheduleBookingByToken = async (req, res, next) => {
     const bookingEffStart = new Date(startUtc.getTime() - eventType.bufferBeforeMin * 60 * 1000)
     const bookingEffEnd = new Date(endUtc.getTime() + eventType.bufferAfterMin * 60 * 1000)
 
-    const isGoogleAvailable = await validateGoogleAvailability(host.id, bookingEffStart, bookingEffEnd)
-    if (!isGoogleAvailable) {
-      return res.status(409).json({
-        error: 'This time slot is no longer available. Please select another slot.',
-      })
-    }
-
     try {
       const updatedBooking = await prisma.$transaction(
         async (tx) => {
           await tx.$executeRaw`SELECT id FROM users WHERE id = ${host.id}::uuid FOR UPDATE`
 
+          const limitsCheck = await checkBookingLimits({
+            hostId: host.id,
+            eventTypeId: eventType.id,
+            targetDate: startUtc,
+            excludeBookingId: booking.id,
+            tx,
+          })
+
+          if (!limitsCheck.isAllowed) {
+            const err = new Error(limitsCheck.reason || 'This time slot is no longer available. Please select another slot.')
+            err.statusCode = 409
+            throw err
+          }
+
           const searchRangeStart = new Date(startUtc.getTime() - 24 * 60 * 60 * 1000)
           const searchRangeEnd = new Date(endUtc.getTime() + 24 * 60 * 60 * 1000)
 
-          const [confirmedBookings, externalBusySlots] = await Promise.all([
-            tx.booking.findMany({
-              where: {
-                hostId: host.id,
-                status: 'CONFIRMED',
-                id: { not: booking.id },
-                startTime: { lt: searchRangeEnd },
-                endTime: { gt: searchRangeStart },
-              },
-              include: {
-                eventType: {
-                  select: {
-                    bufferBeforeMin: true,
-                    bufferAfterMin: true,
-                  },
+          const confirmedBookings = await tx.booking.findMany({
+            where: {
+              hostId: host.id,
+              status: 'CONFIRMED',
+              id: { not: booking.id },
+              startTime: { lt: searchRangeEnd },
+              endTime: { gt: searchRangeStart },
+            },
+            include: {
+              eventType: {
+                select: {
+                  bufferBeforeMin: true,
+                  bufferAfterMin: true,
                 },
               },
-            }),
-            tx.externalBusySlot.findMany({
-              where: {
-                userId: host.id,
-                startTime: { lt: searchRangeEnd },
-                endTime: { gt: searchRangeStart },
-              },
-            }),
-          ])
+            },
+          })
 
           const hasBookingConflict = confirmedBookings.some((b) => {
             const bBufferBefore = (b.eventType?.bufferBeforeMin || 0) * 60 * 1000
@@ -547,16 +554,6 @@ export const rescheduleBookingByToken = async (req, res, next) => {
           })
 
           if (hasBookingConflict) {
-            const err = new Error('This time slot is no longer available. Please select another slot.')
-            err.statusCode = 409
-            throw err
-          }
-
-          const hasExternalConflict = externalBusySlots.some((slot) => {
-            return bookingEffStart < slot.endTime && bookingEffEnd > slot.startTime
-          })
-
-          if (hasExternalConflict) {
             const err = new Error('This time slot is no longer available. Please select another slot.')
             err.statusCode = 409
             throw err

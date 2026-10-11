@@ -4,12 +4,20 @@ export interface User {
   email: string
   username: string
   timezone: string
+  maxBookingsCount?: number | null
+  maxBookingsPeriod?: 'DAY' | string | null
   createdAt: string
   updatedAt: string
 }
 
 export interface AuthResponse {
   user: User
+}
+
+export interface HostLimitsResponse {
+  maxBookingsCount: number | null
+  maxBookingsPeriod: 'DAY' | string | null
+  message?: string
 }
 
 export interface BookingQuestion {
@@ -33,6 +41,9 @@ export interface EventType {
   slug: string
   description: string | null
   durationMin: number
+  slotIntervalMin?: number | null
+  maxBookingsCount?: number | null
+  maxBookingsPeriod?: 'DAY' | string | null
   location?: string | null
   isActive: boolean
   minNoticeMin: number
@@ -119,6 +130,7 @@ export interface SlotsResponse {
 
 export interface Booking {
   id: string
+  token?: string
   eventTypeId: string
   hostId: string
   guestName: string
@@ -157,10 +169,3 @@ export interface BookingsResponse {
   bookings: Booking[]
 }
 
-export interface CalendarStatusResponse {
-  connected: boolean
-  calendarId: string | null
-  lastSyncedAt: string | null
-  watchExpiration: string | null
-  busySlotsCount?: number
-}

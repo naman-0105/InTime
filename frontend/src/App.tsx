@@ -9,6 +9,7 @@ import { EventEdit } from './pages/EventEdit'
 import { Availability } from './pages/Availability'
 import { PublicBooking } from './pages/PublicBooking'
 import { BookedConfirmation } from './pages/BookedConfirmation'
+import { Landing } from './pages/Landing'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { AppLayout } from './components/AppLayout'
 
@@ -69,8 +70,8 @@ function App() {
               </ProtectedRoute>
             }
           />
-          <Route path="/" element={<Navigate to="/events" replace />} />
-          <Route path="*" element={<Navigate to="/events" replace />} />
+          <Route path="/" element={<Landing />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

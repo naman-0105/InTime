@@ -1,5 +1,4 @@
 import prisma from '../db/prisma.js'
-import { enqueueEmail } from '../queues/emailQueue.js'
 import { checkBookingLimits } from '../services/slotService.js'
 
 export const getBookings = async (req, res, next) => {
@@ -127,47 +126,71 @@ export const cancelBooking = async (req, res, next) => {
       return res.status(400).json({ error: 'Booking is already cancelled' })
     }
 
-    const updatedBooking = await prisma.booking.update({
-      where: { id },
-      data: {
-        status: 'CANCELLED',
-      },
-      select: {
-        id: true,
-        guestName: true,
-        guestEmail: true,
-        startTime: true,
-        endTime: true,
-        status: true,
-        eventType: {
-          select: {
-            name: true,
-            durationMin: true,
-            description: true,
-            location: true,
+    const updatedBooking = await prisma.$transaction(async (tx) => {
+      const b = await tx.booking.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+        },
+        select: {
+          id: true,
+          guestName: true,
+          guestEmail: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+          eventType: {
+            select: {
+              name: true,
+              durationMin: true,
+              description: true,
+              location: true,
+            },
+          },
+          host: {
+            select: {
+              name: true,
+              email: true,
+              username: true,
+              timezone: true,
+            },
+          },
+          answers: {
+            select: {
+              id: true,
+              label: true,
+              value: true,
+            },
           },
         },
-        host: {
-          select: {
-            name: true,
-            email: true,
-            username: true,
-            timezone: true,
-          },
-        },
-        answers: {
-          select: {
-            id: true,
-            label: true,
-            value: true,
-          },
-        },
-      },
-    })
+      })
 
-    await enqueueEmail({
-      type: 'booking-cancellation',
-      bookingId: updatedBooking.id,
+      await tx.emailOutbox.createMany({
+        data: [
+          {
+            bookingId: b.id,
+            recipient: b.guestEmail,
+            type: 'BOOKING_CANCELLED_GUEST',
+            payload: {
+              booking: b,
+              host: b.host,
+              eventType: b.eventType,
+            },
+          },
+          {
+            bookingId: b.id,
+            recipient: b.host.email,
+            type: 'BOOKING_CANCELLED_HOST',
+            payload: {
+              booking: b,
+              host: b.host,
+              eventType: b.eventType,
+            },
+          },
+        ],
+      })
+
+      return b
     })
 
     return res.status(200).json({
@@ -315,7 +338,7 @@ export const rescheduleBooking = async (req, res, next) => {
             throw err
           }
 
-          return await tx.booking.update({
+          const updated = await tx.booking.update({
             where: { id },
             data: {
               startTime: startUtc,
@@ -355,18 +378,42 @@ export const rescheduleBooking = async (req, res, next) => {
               },
             },
           })
+
+          await tx.emailOutbox.createMany({
+            data: [
+              {
+                bookingId: updated.id,
+                recipient: updated.guestEmail,
+                type: 'BOOKING_RESCHEDULED_GUEST',
+                payload: {
+                  booking: updated,
+                  host: updated.host,
+                  eventType: updated.eventType,
+                  previousStartTime,
+                  previousEndTime,
+                },
+              },
+              {
+                bookingId: updated.id,
+                recipient: updated.host.email,
+                type: 'BOOKING_RESCHEDULED_HOST',
+                payload: {
+                  booking: updated,
+                  host: updated.host,
+                  eventType: updated.eventType,
+                  previousStartTime,
+                  previousEndTime,
+                },
+              },
+            ],
+          })
+
+          return updated
         },
         {
           isolationLevel: 'Serializable',
         }
       )
-
-      await enqueueEmail({
-        type: 'booking-rescheduled',
-        bookingId: updatedBooking.id,
-        previousStartTime,
-        previousEndTime,
-      })
 
       return res.status(200).json({
         booking: updatedBooking,

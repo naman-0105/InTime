@@ -127,50 +127,56 @@ export const generateGoogleCalendarUrl = ({
   return `https://calendar.google.com/calendar/render?${params.toString()}`
 }
 
-export const sendBookingConfirmationEmails = async ({ booking, host, eventType }) => {
-  try {
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'
-    const { dateStr, timeStr } = formatTimeRange(
-      booking.startTime,
-      booking.endTime,
-      host.timezone || 'UTC'
-    )
+export const sendOutboxEmail = async ({ type, recipient, payload }) => {
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'
+  const { booking, host, eventType, previousStartTime, previousEndTime } = payload || {}
 
-    const googleCalendarUrl = generateGoogleCalendarUrl({
-      title: `${eventType.name} with ${host.name}`,
-      startTime: booking.startTime,
-      endTime: booking.endTime,
-      description: eventType.description,
-      guestName: booking.guestName,
-      guestEmail: booking.guestEmail,
-      hostName: host.name,
-      hostEmail: host.email,
-      location: eventType.location || undefined,
-      manageUrl: `${clientUrl}/booked/${booking.token}`,
-      answers: booking.answers,
-    })
+  if (!booking || !host || !eventType) {
+    throw new Error('Email payload missing required booking, host, or eventType data')
+  }
 
-    let answersHtml = ''
-    if (booking.answers && booking.answers.length > 0) {
-      answersHtml = `
-        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e5e7eb;">
-          <p style="margin: 0 0 6px 0; font-size: 13px; font-weight: 600; color: #374151;">Custom Question Responses:</p>
-          ${booking.answers
-            .map(
-              (a) =>
-                `<p style="margin: 0 0 4px 0; font-size: 13px;"><strong>${a.label}:</strong> ${a.value}</p>`
-            )
-            .join('')}
-        </div>
-      `
-    }
+  const { dateStr, timeStr } = formatTimeRange(
+    booking.startTime,
+    booking.endTime,
+    host.timezone || 'UTC'
+  )
 
-    const locationHtml = eventType.location
-      ? `<p style="margin: 0 0 8px 0;"><strong>Location:</strong> ${eventType.location}</p>`
-      : ''
+  const googleCalendarUrl = generateGoogleCalendarUrl({
+    title: `${eventType.name} with ${host.name}`,
+    startTime: booking.startTime,
+    endTime: booking.endTime,
+    description: eventType.description,
+    guestName: booking.guestName,
+    guestEmail: booking.guestEmail,
+    hostName: host.name,
+    hostEmail: host.email,
+    location: eventType.location || undefined,
+    manageUrl: `${clientUrl}/booked/${booking.token}`,
+    answers: booking.answers,
+  })
 
-    const guestSubject = `Confirmed: ${eventType.name} with ${host.name}`
-    const guestHtml = `
+  let answersHtml = ''
+  if (booking.answers && booking.answers.length > 0) {
+    answersHtml = `
+      <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e5e7eb;">
+        <p style="margin: 0 0 6px 0; font-size: 13px; font-weight: 600; color: #374151;">Custom Question Responses:</p>
+        ${booking.answers
+          .map((a) => `<p style="margin: 0 0 4px 0; font-size: 13px;"><strong>${a.label}:</strong> ${a.value}</p>`)
+          .join('')}
+      </div>
+    `
+  }
+
+  const locationHtml = eventType.location
+    ? `<p style="margin: 0 0 8px 0;"><strong>Location:</strong> ${eventType.location}</p>`
+    : ''
+
+  let subject = ''
+  let html = ''
+
+  if (type === 'BOOKING_CONFIRMATION_GUEST') {
+    subject = `Confirmed: ${eventType.name} with ${host.name}`
+    html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; color: #1f2937;">
         <h2 style="color: #111827; margin-top: 0;">Meeting Confirmed</h2>
         <p>Your meeting with <strong>${host.name}</strong> has been successfully booked.</p>
@@ -191,9 +197,9 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
         <p style="font-size: 14px; color: #6b7280;">Need to manage or cancel this booking? <a href="${clientUrl}/booked/${booking.token}" style="color: #2563eb; text-decoration: underline;">Click here to view booking</a>.</p>
       </div>
     `
-
-    const hostSubject = `New Booking: ${eventType.name} with ${booking.guestName}`
-    const hostHtml = `
+  } else if (type === 'BOOKING_CONFIRMATION_HOST') {
+    subject = `New Booking: ${eventType.name} with ${booking.guestName}`
+    html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; color: #1f2937;">
         <h2 style="color: #111827; margin-top: 0;">New Meeting Scheduled</h2>
         <p><strong>${booking.guestName}</strong> scheduled a meeting with you.</p>
@@ -213,78 +219,21 @@ export const sendBookingConfirmationEmails = async ({ booking, host, eventType }
         <p style="font-size: 14px; color: #6b7280;">View this meeting on your <a href="${clientUrl}/dashboard" style="color: #2563eb; text-decoration: underline;">InTime Dashboard</a>.</p>
       </div>
     `
-
-    const results = await Promise.allSettled([
-      sendEmail({
-        to: booking.guestEmail,
-        subject: guestSubject,
-        html: guestHtml,
-      }),
-      sendEmail({
-        to: host.email,
-        subject: hostSubject,
-        html: hostHtml,
-      }),
-    ])
-
-    results.forEach((r, idx) => {
-      if (r.status === 'rejected') {
-        const recipient = idx === 0 ? `Guest (${booking.guestEmail})` : `Host (${host.email})`
-        console.error(`[Email Error] Confirmation email to ${recipient} failed:`, r.reason?.message || r.reason)
-      }
-    })
-  } catch (error) {
-    console.error('Failed to send booking confirmation emails:', error)
-  }
-}
-
-export const sendBookingRescheduledEmails = async ({
-  booking,
-  host,
-  eventType,
-  previousStartTime,
-  previousEndTime,
-}) => {
-  try {
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'
-    const { dateStr: newDateStr, timeStr: newTimeStr } = formatTimeRange(
-      booking.startTime,
-      booking.endTime,
-      host.timezone || 'UTC'
-    )
+  } else if (type === 'BOOKING_RESCHEDULED_GUEST') {
     const { dateStr: prevDateStr, timeStr: prevTimeStr } = formatTimeRange(
       previousStartTime,
       previousEndTime,
       host.timezone || 'UTC'
     )
-
-    const googleCalendarUrl = generateGoogleCalendarUrl({
-      title: `${eventType.name} with ${host.name}`,
-      startTime: booking.startTime,
-      endTime: booking.endTime,
-      description: eventType.description,
-      guestName: booking.guestName,
-      guestEmail: booking.guestEmail,
-      hostName: host.name,
-      hostEmail: host.email,
-      location: eventType.location || undefined,
-      manageUrl: `${clientUrl}/booked/${booking.token}`,
-      answers: booking.answers,
-    })
-
-    const locationHtml = eventType.location
-      ? `<p style="margin: 0 0 8px 0;"><strong>Location:</strong> ${eventType.location}</p>`
-      : ''
-
-    const guestSubject = `Rescheduled: ${eventType.name} with ${host.name}`
-    const guestHtml = `
+    subject = `Rescheduled: ${eventType.name} with ${host.name}`
+    html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; color: #1f2937;">
         <h2 style="color: #111827; margin-top: 0;">Meeting Rescheduled</h2>
         <p>Your meeting with <strong>${host.name}</strong> has been successfully rescheduled.</p>
         <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 20px 0;">
           <p style="margin: 0 0 8px 0;"><strong>Event:</strong> ${eventType.name}</p>
-          <p style="margin: 0 0 8px 0;"><strong>New Date:</strong> ${newDateStr}</p>
-          <p style="margin: 0 0 8px 0;"><strong>New Time:</strong> ${newTimeStr}</p>
+          <p style="margin: 0 0 8px 0;"><strong>New Date:</strong> ${dateStr}</p>
+          <p style="margin: 0 0 8px 0;"><strong>New Time:</strong> ${timeStr}</p>
           ${locationHtml}
           <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px;"><strong>Previous Time:</strong> ${prevDateStr} at ${prevTimeStr}</p>
           <p style="margin: 0 0 8px 0;"><strong>Host:</strong> ${host.name} (${host.email})</p>
@@ -298,16 +247,21 @@ export const sendBookingRescheduledEmails = async ({
         <p style="font-size: 14px; color: #6b7280;">Need to manage or cancel this booking? <a href="${clientUrl}/booked/${booking.token}" style="color: #2563eb; text-decoration: underline;">Click here to view booking</a>.</p>
       </div>
     `
-
-    const hostSubject = `Rescheduled: ${eventType.name} with ${booking.guestName}`
-    const hostHtml = `
+  } else if (type === 'BOOKING_RESCHEDULED_HOST') {
+    const { dateStr: prevDateStr, timeStr: prevTimeStr } = formatTimeRange(
+      previousStartTime,
+      previousEndTime,
+      host.timezone || 'UTC'
+    )
+    subject = `Rescheduled: ${eventType.name} with ${booking.guestName}`
+    html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; color: #1f2937;">
         <h2 style="color: #111827; margin-top: 0;">Meeting Rescheduled</h2>
         <p><strong>${booking.guestName}</strong> rescheduled their meeting with you.</p>
         <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 20px 0;">
           <p style="margin: 0 0 8px 0;"><strong>Event:</strong> ${eventType.name}</p>
-          <p style="margin: 0 0 8px 0;"><strong>New Date:</strong> ${newDateStr}</p>
-          <p style="margin: 0 0 8px 0;"><strong>New Time:</strong> ${newTimeStr}</p>
+          <p style="margin: 0 0 8px 0;"><strong>New Date:</strong> ${dateStr}</p>
+          <p style="margin: 0 0 8px 0;"><strong>New Time:</strong> ${timeStr}</p>
           ${locationHtml}
           <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px;"><strong>Previous Time:</strong> ${prevDateStr} at ${prevTimeStr}</p>
           <p style="margin: 0;"><strong>Guest Details:</strong> ${booking.guestName} (${booking.guestEmail})</p>
@@ -320,46 +274,9 @@ export const sendBookingRescheduledEmails = async ({
         <p style="font-size: 14px; color: #6b7280;">View this meeting on your <a href="${clientUrl}/dashboard" style="color: #2563eb; text-decoration: underline;">InTime Dashboard</a>.</p>
       </div>
     `
-
-    const results = await Promise.allSettled([
-      sendEmail({
-        to: booking.guestEmail,
-        subject: guestSubject,
-        html: guestHtml,
-      }),
-      sendEmail({
-        to: host.email,
-        subject: hostSubject,
-        html: hostHtml,
-      }),
-    ])
-
-    results.forEach((r, idx) => {
-      if (r.status === 'rejected') {
-        const recipient = idx === 0 ? `Guest (${booking.guestEmail})` : `Host (${host.email})`
-        console.error(`[Email Error] Reschedule email to ${recipient} failed:`, r.reason?.message || r.reason)
-      }
-    })
-  } catch (error) {
-    console.error('Failed to send booking reschedule emails:', error)
-  }
-}
-
-export const sendBookingCancellationEmails = async ({ booking, host, eventType }) => {
-  try {
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'
-    const { dateStr, timeStr } = formatTimeRange(
-      booking.startTime,
-      booking.endTime,
-      host.timezone || 'UTC'
-    )
-
-    const locationHtml = eventType.location
-      ? `<p style="margin: 0 0 8px 0;"><strong>Location:</strong> ${eventType.location}</p>`
-      : ''
-
-    const guestSubject = `Cancelled: ${eventType.name} with ${host.name}`
-    const guestHtml = `
+  } else if (type === 'BOOKING_CANCELLED_GUEST') {
+    subject = `Cancelled: ${eventType.name} with ${host.name}`
+    html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; color: #1f2937;">
         <h2 style="color: #dc2626; margin-top: 0;">Meeting Cancelled</h2>
         <p>The following scheduled meeting has been cancelled:</p>
@@ -373,9 +290,9 @@ export const sendBookingCancellationEmails = async ({ booking, host, eventType }
         <p style="font-size: 14px; color: #6b7280;">If you wish to reschedule, visit <a href="${clientUrl}" style="color: #2563eb; text-decoration: underline;">InTime</a>.</p>
       </div>
     `
-
-    const hostSubject = `Cancelled: ${eventType.name} with ${booking.guestName}`
-    const hostHtml = `
+  } else if (type === 'BOOKING_CANCELLED_HOST') {
+    subject = `Cancelled: ${eventType.name} with ${booking.guestName}`
+    html = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px; color: #1f2937;">
         <h2 style="color: #dc2626; margin-top: 0;">Meeting Cancelled</h2>
         <p>The following scheduled meeting has been cancelled:</p>
@@ -389,27 +306,13 @@ export const sendBookingCancellationEmails = async ({ booking, host, eventType }
         <p style="font-size: 14px; color: #6b7280;">View all bookings on your <a href="${clientUrl}/dashboard" style="color: #2563eb; text-decoration: underline;">Dashboard</a>.</p>
       </div>
     `
-
-    const results = await Promise.allSettled([
-      sendEmail({
-        to: booking.guestEmail,
-        subject: guestSubject,
-        html: guestHtml,
-      }),
-      sendEmail({
-        to: host.email,
-        subject: hostSubject,
-        html: hostHtml,
-      }),
-    ])
-
-    results.forEach((r, idx) => {
-      if (r.status === 'rejected') {
-        const recipient = idx === 0 ? `Guest (${booking.guestEmail})` : `Host (${host.email})`
-        console.error(`[Email Error] Cancellation email to ${recipient} failed:`, r.reason?.message || r.reason)
-      }
-    })
-  } catch (error) {
-    console.error('Failed to send booking cancellation emails:', error)
+  } else {
+    throw new Error(`Unsupported email outbox type: ${type}`)
   }
+
+  return await sendEmail({
+    to: recipient,
+    subject,
+    html,
+  })
 }

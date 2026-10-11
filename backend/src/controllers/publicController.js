@@ -2,7 +2,6 @@ import crypto from 'crypto'
 import prisma from '../db/prisma.js'
 import { generateAvailableSlots, checkBookingLimits } from '../services/slotService.js'
 import { isValidEmail } from '../utils/validation.js'
-import { enqueueEmail } from '../queues/emailQueue.js'
 
 export const getPublicEvent = async (req, res, next) => {
   try {
@@ -360,7 +359,7 @@ export const createBooking = async (req, res, next) => {
             throw err
           }
 
-          return await tx.booking.create({
+          const newBooking = await tx.booking.create({
             data: {
               token,
               eventTypeId: event.id,
@@ -397,16 +396,38 @@ export const createBooking = async (req, res, next) => {
               },
             },
           })
+
+          await tx.emailOutbox.createMany({
+            data: [
+              {
+                bookingId: newBooking.id,
+                recipient: newBooking.guestEmail,
+                type: 'BOOKING_CONFIRMATION_GUEST',
+                payload: {
+                  booking: newBooking,
+                  host,
+                  eventType: event,
+                },
+              },
+              {
+                bookingId: newBooking.id,
+                recipient: host.email,
+                type: 'BOOKING_CONFIRMATION_HOST',
+                payload: {
+                  booking: newBooking,
+                  host,
+                  eventType: event,
+                },
+              },
+            ],
+          })
+
+          return newBooking
         },
         {
           isolationLevel: 'Serializable',
         }
       )
-
-      await enqueueEmail({
-        type: 'booking-confirmation',
-        bookingId: booking.id,
-      })
 
       return res.status(201).json({ booking })
     } catch (txError) {
@@ -559,7 +580,7 @@ export const rescheduleBookingByToken = async (req, res, next) => {
             throw err
           }
 
-          return await tx.booking.update({
+          const updated = await tx.booking.update({
             where: { token },
             data: {
               startTime: startUtc,
@@ -599,18 +620,42 @@ export const rescheduleBookingByToken = async (req, res, next) => {
               },
             },
           })
+
+          await tx.emailOutbox.createMany({
+            data: [
+              {
+                bookingId: updated.id,
+                recipient: updated.guestEmail,
+                type: 'BOOKING_RESCHEDULED_GUEST',
+                payload: {
+                  booking: updated,
+                  host: updated.host,
+                  eventType: updated.eventType,
+                  previousStartTime,
+                  previousEndTime,
+                },
+              },
+              {
+                bookingId: updated.id,
+                recipient: updated.host.email,
+                type: 'BOOKING_RESCHEDULED_HOST',
+                payload: {
+                  booking: updated,
+                  host: updated.host,
+                  eventType: updated.eventType,
+                  previousStartTime,
+                  previousEndTime,
+                },
+              },
+            ],
+          })
+
+          return updated
         },
         {
           isolationLevel: 'Serializable',
         }
       )
-
-      await enqueueEmail({
-        type: 'booking-rescheduled',
-        bookingId: updatedBooking.id,
-        previousStartTime,
-        previousEndTime,
-      })
 
       return res.status(200).json({
         booking: updatedBooking,
@@ -705,41 +750,65 @@ export const cancelBookingByToken = async (req, res, next) => {
       return res.status(400).json({ error: 'Booking is already cancelled' })
     }
 
-    const updatedBooking = await prisma.booking.update({
-      where: { token },
-      data: {
-        status: 'CANCELLED',
-      },
-      select: {
-        id: true,
-        token: true,
-        guestName: true,
-        guestEmail: true,
-        startTime: true,
-        endTime: true,
-        status: true,
-        eventType: {
-          select: {
-            name: true,
-            durationMin: true,
-            description: true,
-            location: true,
+    const updatedBooking = await prisma.$transaction(async (tx) => {
+      const b = await tx.booking.update({
+        where: { token },
+        data: {
+          status: 'CANCELLED',
+        },
+        select: {
+          id: true,
+          token: true,
+          guestName: true,
+          guestEmail: true,
+          startTime: true,
+          endTime: true,
+          status: true,
+          eventType: {
+            select: {
+              name: true,
+              durationMin: true,
+              description: true,
+              location: true,
+            },
+          },
+          host: {
+            select: {
+              name: true,
+              email: true,
+              username: true,
+              timezone: true,
+            },
           },
         },
-        host: {
-          select: {
-            name: true,
-            email: true,
-            username: true,
-            timezone: true,
-          },
-        },
-      },
-    })
+      })
 
-    await enqueueEmail({
-      type: 'booking-cancellation',
-      bookingId: updatedBooking.id,
+      await tx.emailOutbox.createMany({
+        data: [
+          {
+            bookingId: b.id,
+            recipient: b.guestEmail,
+            type: 'BOOKING_CANCELLED_GUEST',
+            payload: {
+              booking: b,
+              host: b.host,
+              eventType: b.eventType,
+            },
+          },
+          {
+            bookingId: b.id,
+            recipient: b.host.email,
+            type: 'BOOKING_CANCELLED_HOST',
+            payload: {
+              booking: b,
+              host: b.host,
+              eventType: b.eventType,
+            },
+          },
+        ],
+      })
+
+      return b
     })
 
     return res.status(200).json({
